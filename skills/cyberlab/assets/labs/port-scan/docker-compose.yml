@@ -1,0 +1,23 @@
+# summary: TCP connect scan of ports 1-1024 (stdlib socket attacker) vs a few normal HTTP requests; nginx victim
+# Run: cyberlab run <lab> attack ; cyberlab run <lab> benign      (PORTS=1-1024 to change the range)
+# The capture keeps every TCP packet to/from the victim: SYN to closed ports answered by RST.
+name: cyberlab-port-scan
+networks:
+  lab: { driver: bridge, internal: true }
+services:
+  victim:
+    image: nginx:1.27-alpine
+    networks: [lab]
+  capture:
+    image: ${CYBERLAB_TOOLS:-cyberlab/tools:local}
+    network_mode: "service:victim"
+    command: tcpdump -Z root -i eth0 -B 32768 --immediate-mode -U -w /cap/${PCAP:-attack}.pcap tcp
+    healthcheck: { test: ["CMD", "sh", "-c", "test -s /cap/${PCAP:-attack}.pcap"], interval: 1s, retries: 30 }
+  generator:
+    image: python:3.12-slim
+    networks: [lab]
+    depends_on:
+      victim: { condition: service_started }
+      capture: { condition: service_healthy }
+    volumes: ["./scan.py:/lab/scan.py:ro"]
+    command: python /lab/scan.py victim ${MODE:-attack} ${PORTS:-1-1024}

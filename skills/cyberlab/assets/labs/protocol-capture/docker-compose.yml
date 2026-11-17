@@ -1,0 +1,25 @@
+# summary: Protocol capture (single mode): a real server and its own client exchange normal traffic; example Redis RESP on TCP 6379
+# Run: cyberlab run <lab> capture                                  -> out/capture.pcap
+# Adapt: set victim to the protocol's server image, generator to a client that exercises every
+# message type (gen.sh), the capture filter to the protocol's port, and expect.json to what the
+# consumer needs to see. Same contract as the attack templates: victim / generator / capture.
+name: cyberlab-protocol-capture
+networks:
+  lab: { driver: bridge, internal: true }
+services:
+  victim:
+    image: redis:7.4-alpine
+    networks: [lab]
+  capture:
+    image: ${CYBERLAB_TOOLS:-cyberlab/tools:local}
+    network_mode: "service:victim"
+    command: tcpdump -Z root -i eth0 -B 32768 --immediate-mode -U -w /cap/${PCAP:-capture}.pcap tcp port 6379
+    healthcheck: { test: ["CMD", "sh", "-c", "test -s /cap/${PCAP:-capture}.pcap"], interval: 1s, retries: 30 }
+  generator:
+    image: redis:7.4-alpine
+    networks: [lab]
+    depends_on:
+      victim: { condition: service_started }
+      capture: { condition: service_healthy }
+    volumes: ["./gen.sh:/lab/gen.sh:ro"]
+    command: sh /lab/gen.sh victim

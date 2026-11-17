@@ -1,0 +1,6 @@
+# Normal traffic to the same server: the rules under test must stay silent on it.
+{"name": "home", "method": "GET", "path": "/", "headers": {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Firefox/128.0"}}
+{"name": "search", "method": "GET", "path": "/?q=network+monitoring"}
+{"name": "login", "method": "GET", "path": "/login?user=alice&pass=correct-horse"}
+{"name": "static", "method": "GET", "path": "/static/app.js"}
+{"name": "xml-post", "method": "POST", "path": "/api", "headers": {"Content-Type": "application/xml"}, "body": "<?xml version=\"1.0\"?><r><v>42</v></r>"}

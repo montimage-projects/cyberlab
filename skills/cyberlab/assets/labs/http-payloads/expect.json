@@ -1,0 +1,41 @@
+{
+  "traces": {
+    "attack.pcap": [
+      {
+        "filter": "http.request",
+        "min": 6
+      },
+      {
+        "filter": "http.user_agent contains \"jndi\"",
+        "min": 1
+      },
+      {
+        "filter": "http.request.uri contains \"../\"",
+        "min": 1
+      },
+      {
+        "filter": "http.response",
+        "min": 6
+      }
+    ],
+    "benign.pcap": [
+      {
+        "filter": "http.request",
+        "min": 5
+      },
+      {
+        "filter": "http",
+        "min": 1,
+        "endpoints": 2
+      },
+      {
+        "filter": "http contains \"jndi\" || http contains \"DOCTYPE\"",
+        "max": 0
+      },
+      {
+        "filter": "http.response.code == 200",
+        "min": 5
+      }
+    ]
+  }
+}

@@ -1,0 +1,314 @@
+#!/usr/bin/env bash
+# cyberlab — build and run a minimal, isolated lab that produces the traces of ONE mission.
+# The host needs only docker (Compose v2). Every check runs in the small tools image
+# (tcpdump, tshark, python3); a lab is one victim, one generator and one capture sidecar.
+#
+# Usage: cyberlab <command> [args]
+#   doctor                        check docker, compose and the tools image
+#   build                         build the tools image (cyberlab/tools:local)
+#   templates                     list the lab templates
+#   new <dir> --from <template>   copy a template into a lab directory (keeps an existing
+#                                 mission.md and expect.json; refuses an existing lab)
+#   check <lab>                   isolation policy check of the lab's resolved compose file
+#   run <lab> <mode>              policy check, up, runtime isolation check, wait for the
+#                                 generator, capture, verified teardown, then verify
+#                                 out/<mode>.pcap against expect.json
+#   craft <lab> <trace.pcap> -- <craft_pcap.py args>
+#   craft <lab> <trace.pcap> --script <file.py> [-- args]
+#                                 write a synthetic trace with no network at all, then verify it
+#   verify <lab> [trace.pcap]...  check traces in <lab>/out against <lab>/expect.json
+#   down <lab>                    tear one lab down
+#   status [lab]                  containers, networks and volumes of every cyberlab lab (or one);
+#                                 the dry-run of nuke
+#   nuke                          remove every cyberlab-* container, network and volume
+#
+# Env: CYBERLAB_TOOLS (default cyberlab/tools:local), CYBERLAB_TIMEOUT (generator wait, default
+#      300 s). Exit: 0 ok, 1 usage/environment error, 2 a policy, lab or expectation check failed.
+set -u
+die() { echo "Error: $1" >&2; exit "${2:-1}"; }
+SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd -P)"
+TOOLS="${CYBERLAB_TOOLS:-cyberlab/tools:local}"
+TIMEOUT="${CYBERLAB_TIMEOUT:-300}"
+export CYBERLAB_TOOLS="$TOOLS"
+usage() { awk 'NR>1 && /^#/{sub(/^# ?/,"");print;next} NR>1{exit}' "$0"; }
+
+need_docker() {
+  command -v docker >/dev/null || die "docker not found. Install Docker Desktop (macOS/Windows) or Docker Engine with the Compose v2 plugin."
+  docker info >/dev/null 2>&1 || die "the Docker daemon is not reachable. Start Docker Desktop or the docker service, then retry."
+  docker compose version >/dev/null 2>&1 || die "'docker compose' (v2) not found. Install the Compose plugin; docker-compose v1 is not supported."
+}
+need_tools() { docker image inspect "$TOOLS" >/dev/null 2>&1 || die "tools image $TOOLS not found. Run: cyberlab build"; }
+abspath() { if [ -d "$1" ]; then (cd "$1" && pwd -P); else echo "$(cd "$(dirname "$1")" && pwd -P)/$(basename "$1")"; fi; }
+need_lab() { [ -f "$1/docker-compose.yml" ] || die "no docker-compose.yml in $1. Create one with: cyberlab new <dir> --from <template>"; }
+
+# tools <docker args...> -- <cmd...>: run in the tools image, no network, no capabilities
+tools() {
+  local args=()
+  while [ $# -gt 0 ] && [ "$1" != "--" ]; do args+=("$1"); shift; done
+  [ "${1:-}" = "--" ] && shift
+  docker run --rm -i --network none --cap-drop ALL --security-opt no-new-privileges \
+    --user "$(id -u):$(id -g)" --label org.cyberlab.role=tools-run -v "$SKILL_DIR/scripts:/cyberlab:ro" ${args[@]+"${args[@]}"} "$TOOLS" "$@"
+}
+
+compose_json() { # <lab>: resolved compose JSON on stdout; on failure the compose error, exit 1
+  local err; err="$(mktemp)"; local out
+  out="$(cd "$1" && docker compose config --format json 2>"$err")" || { cat "$err"; rm -f "$err"; return 1; }
+  rm -f "$err"; printf '%s' "$out"
+}
+modes_of() { # <lab>: the modes named by expect.json traces (<mode>.pcap)
+  tools -v "$1:/lab:ro" -- python3 -c 'import json; [print(t[:-5]) for t in json.load(open("/lab/expect.json")).get("traces", {}) if t.endswith(".pcap")]' 2>/dev/null
+}
+project_of() { compose_json "$1" | tools -- python3 -c 'import json,sys; print(json.load(sys.stdin).get("name",""))' 2>/dev/null; }
+
+require_expectation() { # <lab> <trace>: expect.json is valid and lists the trace
+  [ -f "$1/expect.json" ] || die "no $1/expect.json. Write what the trace must show before generating it (references/mission.md)."
+  local rc=0
+  tools -v "$1:/lab:ro" -- python3 -c 'import json,sys
+try: d = json.load(open("/lab/expect.json"))
+except Exception: sys.exit(3)
+sys.exit(0 if sys.argv[1] in d.get("traces", {}) else 2)' "$2" 2>/dev/null || rc=$?
+  [ "$rc" = 3 ] && die "$1/expect.json is not valid JSON. Fix it (references/mission.md shows the format)."
+  [ "$rc" = 0 ] || die "no expectation for $2 in $1/expect.json. Write what the trace must show before generating it (references/mission.md)."
+}
+no_symlinks() { # <lab>: a symlink could point a bind mount at any host path
+  local l; l="$(find "$1" -type l 2>/dev/null | head -3)"
+  [ -z "$l" ] || die "the lab contains symlinks ($(echo "$l" | tr '\n' ' ')). Replace them with real files: bind mounts must stay inside the lab." 2
+}
+
+policy() { # <lab> [--runner]   (checks the model as `up` will see it: MODE/PCAP must be exported)
+  local lab="$1"; shift
+  no_symlinks "$lab"
+  local json; json="$(compose_json "$lab")" || die "docker compose config failed in $lab: $json" 2
+  printf '%s' "$json" | tools -- python3 /cyberlab/lab_policy.py --lab-dir "$(cd "$lab" && pwd)" \
+    --lab-dir "$(cd "$lab" && pwd -P)" --tools-image "$TOOLS" "$@"
+}
+
+cmd_doctor() {
+  need_docker
+  echo "PASS docker   $(docker version -f '{{.Server.Version}}' 2>/dev/null) ($(docker info -f '{{.OSType}}/{{.Architecture}}' 2>/dev/null))"
+  echo "PASS compose  $(docker compose version --short 2>/dev/null)"
+  if docker image inspect "$TOOLS" >/dev/null 2>&1; then
+    echo "PASS tools    $TOOLS: $(tools -- sh -c 'tshark --version | head -1; tcpdump --version 2>&1 | head -1; python3 --version' | tr '\n' ';')"
+  else
+    echo "FAIL tools    $TOOLS missing. Run: cyberlab build"; exit 2
+  fi
+  local rt; rt="$(docker info -f '{{range $k, $v := .Runtimes}}{{$k}} {{end}}' 2>/dev/null)"
+  case "$rt" in *runsc*|*kata*) echo "NOTE runtime  hardened runtime available ($rt)";; *) echo "NOTE runtime  default runc only: isolation is Docker-level (references/safety.md)";; esac
+}
+
+cmd_build() {
+  need_docker
+  docker build -q -t "$TOOLS" "$SKILL_DIR/assets/tools" >/dev/null || die "tools image build failed. Re-run 'docker build $SKILL_DIR/assets/tools' to see the error." 2
+  echo "PASS build $TOOLS"
+}
+
+cmd_templates() {
+  local d
+  for d in "$SKILL_DIR"/assets/labs/*/; do
+    printf '%-18s %s\n' "$(basename "$d")" "$(sed -n 's/^# *summary: *//p' "$d/docker-compose.yml" | head -1)"
+  done
+}
+
+cmd_new() {
+  local dir="${1:-}" from=""; [ $# -gt 0 ] && shift
+  [ -n "$dir" ] || die "usage: cyberlab new <dir> --from <template>"
+  while [ $# -gt 0 ]; do case "$1" in --from) from="${2:-}"; shift 2;; *) die "new: unknown option '$1'.";; esac; done
+  local list; list="$(ls "$SKILL_DIR/assets/labs" | tr '\n' ' ')"
+  [ -n "$from" ] || die "new: missing --from <template>. Templates: $list"
+  [ -d "$SKILL_DIR/assets/labs/$from" ] || die "new: no template '$from'. Templates: $list"
+  [ -e "$dir/docker-compose.yml" ] && die "new: $dir already holds a lab (docker-compose.yml); nothing was overwritten. Pick a new directory."
+  mkdir -p "$dir" || die "new: cannot create $dir."
+  cp -Rn "$SKILL_DIR/assets/labs/$from/." "$dir/" 2>/dev/null   # -n keeps mission.md/expect.json; BSD cp exits 1 when it skips
+  [ -f "$dir/docker-compose.yml" ] || die "new: cannot copy the template into $dir."
+  local short; short="$(basename "$dir" | tr '[:upper:]_. ' '[:lower:]---' | tr -cd 'a-z0-9-')"
+  sed -i.bak "s/^name: cyberlab-.*/name: cyberlab-$short/" "$dir/docker-compose.yml" && rm -f "$dir/docker-compose.yml.bak"
+  echo "PASS new $dir (template $from, project cyberlab-$short). Next: edit it and expect.json, then: cyberlab check $dir"
+}
+
+cmd_check() { # checks the lab once per mode named in expect.json (variables can differ per mode)
+  [ $# -eq 1 ] || die "usage: cyberlab check <lab>"
+  need_lab "$1"; need_docker; need_tools
+  local lab; lab="$(abspath "$1")"
+  local modes m rc=0; modes="$( [ -f "$lab/expect.json" ] && modes_of "$lab")"
+  [ -n "$modes" ] || { echo "NOTE check: no expect.json traces yet; checking with MODE unset"; modes="-"; }
+  for m in $modes; do
+    if [ "$m" = "-" ]; then unset MODE PCAP; else export MODE="$m" PCAP="$m"; echo "--- mode $m"; fi
+    policy "$lab" --runner || rc=2
+  done
+  return "$rc"
+}
+
+runtime_isolation() { # <project>: verify the RUNNING lab; fails when nothing is found
+  local proj="$1" bad=0 nets cons n c
+  nets="$(docker network ls -q --filter "label=com.docker.compose.project=$proj")"
+  cons="$(docker ps -aq --filter "label=com.docker.compose.project=$proj")"
+  [ -n "$nets" ] || { echo "FAIL runtime no network found for project $proj"; return 1; }
+  [ -n "$cons" ] || { echo "FAIL runtime no container found for project $proj"; return 1; }
+  for n in $nets; do
+    [ "$(docker network inspect -f '{{.Internal}}' "$n")" = true ] || { echo "FAIL runtime network $(docker network inspect -f '{{.Name}}' "$n") is not internal"; bad=1; }
+  done
+  for c in $cons; do
+    for n in $(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$c"); do
+      [ "$(docker network inspect -f '{{.Internal}}' "$n" 2>/dev/null)" = true ] || { echo "FAIL runtime $c is attached to non-internal network $n"; bad=1; }
+    done
+    case "$(docker inspect -f '{{json .HostConfig.PortBindings}}' "$c")" in "{}"|"null"|"") ;; *) echo "FAIL runtime $c publishes ports"; bad=1;; esac
+    [ "$(docker inspect -f '{{.HostConfig.Privileged}}' "$c")" = false ] || { echo "FAIL runtime $c is privileged"; bad=1; }
+    [ "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$c")" = host ] && { echo "FAIL runtime $c uses the host network"; bad=1; }
+  done
+  [ "$bad" = 0 ] && echo "PASS runtime isolation verified on $(echo "$cons" | wc -w | tr -d ' ') running container(s), $(echo "$nets" | wc -w | tr -d ' ') network(s)"
+  return "$bad"
+}
+
+write_provenance() { # <lab> <trace> <origin> <generator> <extra json fields>
+  local lab="$1" trace="$2" sha pk
+  local info; info="$(tools -v "$lab/out:/out:ro" -- sh -c "capinfos -M -c '/out/$trace' | awk -F': *' '/Number of packets/{print \$2}'; sha256sum '/out/$trace' | cut -d' ' -f1")"
+  pk="$(echo "$info" | sed -n 1p)"; sha="$(echo "$info" | sed -n 2p)"
+  local gen; gen="$(printf '%s' "$4" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+  cat >"$lab/out/${trace%.pcap}.provenance.json" <<EOF
+{"trace": "$trace", "origin": "$3", "generator": "$gen", "lab": "$(basename "$lab")",
+ "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "frames": ${pk:-0}, "sha256": "$sha"$5}
+EOF
+  echo "${pk:-0} $sha"
+}
+
+verify_traces() { # <lab> <trace>...
+  local lab="$1"; shift
+  local a=(); for t in "$@"; do a+=(--trace "$t"); done
+  tools -v "$lab:/lab" -- python3 /cyberlab/verify.py --lab /lab ${a[@]+"${a[@]}"}
+}
+
+cmd_run() {
+  [ $# -eq 2 ] || die "usage: cyberlab run <lab> <mode>   (example: cyberlab run labs/ftp attack -> out/attack.pcap)"
+  local lab="$1" mode="$2"
+  case "$mode" in *[!a-z0-9_-]*|"") die "mode '$mode' must use lowercase letters, digits, - or _ (it names out/<mode>.pcap).";; esac
+  need_lab "$lab"; need_docker; need_tools
+  lab="$(abspath "$lab")"
+  require_expectation "$lab" "$mode.pcap"
+  export MODE="$mode" PCAP="$mode"
+  policy "$lab" --runner || die "the lab breaks the isolation policy (FAIL lines above); it was not started." 2
+  local proj; proj="$(project_of "$lab")"
+  case "$proj" in cyberlab-*) ;; *) die "cannot read the lab's project name (got '$proj')." 2;; esac
+  mkdir -p "$lab/out" && rm -f "$lab/out/$mode.pcap" "$lab/out/$mode.pcap.rejected" "$lab/out/$mode.provenance.json"
+  cd "$lab" || die "cannot cd to $lab"
+  cleanup() { docker compose down -v --remove-orphans >/dev/null 2>&1; }
+  reject() { [ -f "out/$mode.pcap" ] && mv "out/$mode.pcap" "out/$mode.pcap.rejected"; die "$1" 2; }
+  trap cleanup EXIT
+  trap 'cleanup; echo "Error: interrupted; the lab was torn down." >&2; exit 130' INT TERM
+  if grep -qE '^\s*build:' docker-compose.yml; then
+    docker compose build -q || die "docker compose build failed (see above). Builds may download; the running lab stays offline." 2
+  fi
+  docker compose up -d >"out/.$mode.up.log" 2>&1 || { cat "out/.$mode.up.log" >&2; die "docker compose up failed (log: $lab/out/.$mode.up.log)." 2; }
+  runtime_isolation "$proj" || die "the running lab is not isolated; it was torn down." 2
+  local cid; cid="$(docker compose ps -aq generator)"
+  [ -n "$cid" ] || die "generator container not found after up." 2
+  local waited=0 st
+  while :; do
+    st="$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null)"
+    { [ "$st" = exited ] || [ "$st" = dead ]; } && break
+    [ "$waited" -ge "$TIMEOUT" ] && { docker compose logs --no-log-prefix generator 2>&1 | tail -10; die "generator still running after ${TIMEOUT}s (CYBERLAB_TIMEOUT); the lab was torn down." 2; }
+    sleep 1; waited=$((waited + 1))
+  done
+  local rc; rc="$(docker inspect -f '{{.State.ExitCode}}' "$cid")"
+  docker compose logs --no-log-prefix generator >"out/$mode.generator.log" 2>&1
+  echo "--- generator log (last 5 lines of out/$mode.generator.log)"; tail -5 "out/$mode.generator.log"
+  sleep 2   # libpcap hands packets over in batches: stopping at once loses the tail
+  docker compose stop -t 5 capture >/dev/null 2>&1
+  docker compose logs --no-log-prefix capture >"out/$mode.capture.log" 2>&1
+  rm -f "out/$mode.pcap"   # only tcpdump's file, copied from the capture container, may become the trace
+  local copied=1; docker compose cp "capture:/cap/$mode.pcap" "out/$mode.pcap" >/dev/null 2>&1 || copied=0
+  local dropped; dropped="$(sed -n 's/^\([0-9][0-9]*\) packets\{0,1\} dropped by kernel.*/\1/p' "out/$mode.capture.log" | tail -1)"
+  local images; images="$(docker compose images --format json 2>/dev/null | tools -- python3 -c 'import json,sys; print(json.dumps(sorted({i["Repository"]+":"+i["Tag"]+"@"+i["ID"][:19] for i in json.load(sys.stdin)})))' 2>/dev/null || echo '[]')"
+  cleanup; trap - EXIT INT TERM
+  local left; left="$(docker ps -aq --filter "label=com.docker.compose.project=$proj")$(docker network ls -q --filter "label=com.docker.compose.project=$proj")"
+  [ -z "$left" ] || die "lab resources still present after teardown. Run: cyberlab down $lab" 2
+  echo "PASS teardown nothing left for $proj"
+  [ "$rc" = 0 ] || reject "generator exited with code $rc (out/$mode.generator.log). Fix the lab; never swap in a crafted trace silently."
+  [ "$copied" = 1 ] || die "no /cap/$mode.pcap in the capture container: its tcpdump must write -w /cap/\${PCAP}.pcap." 2
+  [ -s "out/$mode.pcap" ] || die "out/$mode.pcap is missing or empty: the capture saw nothing. Check the capture's interface and BPF filter." 2
+  [ -n "$dropped" ] || reject "no tcpdump summary in out/$mode.capture.log: cannot tell whether packets were lost."
+  [ "$dropped" = 0 ] || reject "the capture dropped $dropped packet(s) (out/$mode.capture.log): the trace is incomplete. Raise tcpdump's buffer (-B 65536) or slow the generator, then run again."
+  echo "PASS capture 0 packets dropped by kernel"
+  local pk_sha; pk_sha="$(write_provenance "$lab" "$mode.pcap" "lab capture" "$(basename "$lab") mode $mode" ", \"project\": \"$proj\", \"generator_exit\": $rc, \"dropped\": 0, \"images\": $images")"
+  echo "NOTE trace   out/$mode.pcap: ${pk_sha%% *} frames, provenance out/$mode.provenance.json"
+  verify_traces "$lab" "$mode.pcap"
+}
+
+cmd_craft() {
+  [ $# -ge 2 ] || die "usage: cyberlab craft <lab> <trace.pcap> -- <craft_pcap.py args>  |  --script <file.py> [-- args]"
+  local lab="$1" trace="$2"; shift 2
+  case "$trace" in *[!A-Za-z0-9._-]*|.*) die "craft: trace name '$trace' may use only letters, digits, '.', '_' and '-'.";; *.pcap) ;; *) die "craft: the trace name must end in .pcap (got '$trace').";; esac
+  [ -d "$lab" ] || die "craft: lab directory $lab does not exist (mkdir it, and write expect.json first)."
+  need_docker; need_tools
+  lab="$(abspath "$lab")"
+  require_expectation "$lab" "$trace"
+  local script=""
+  if [ "${1:-}" = "--script" ]; then
+    script="${2:-}"; shift 2
+    [ -f "$lab/$script" ] || die "craft: script $lab/$script not found (it must sit inside the lab directory)."
+  fi
+  [ "${1:-}" = "--" ] && shift
+  mkdir -p "$lab/out" && rm -f "$lab/out/$trace"
+  local gen
+  if [ -n "$script" ]; then
+    gen="python3 $script $*"
+    tools -v "$lab:/lab" -w /lab -e "OUT=/lab/out/$trace" -- python3 "/lab/$script" "$@" || die "craft script failed (above)." 2
+  else
+    gen="craft_pcap.py $*"
+    tools -v "$lab:/lab" -w /lab -- python3 /cyberlab/craft_pcap.py --out "/lab/out/$trace" "$@" || die "craft_pcap.py failed (above). Run 'python3 $SKILL_DIR/scripts/craft_pcap.py --help' for its arguments." 2
+  fi
+  [ -s "$lab/out/$trace" ] || die "craft: $lab/out/$trace was not written. A --script must write to \$OUT." 2
+  local pk_sha; pk_sha="$(write_provenance "$lab" "$trace" "crafted (synthetic)" "$gen" "")"
+  echo "NOTE trace   out/$trace: ${pk_sha%% *} frames, SYNTHETIC, provenance out/${trace%.pcap}.provenance.json"
+  verify_traces "$lab" "$trace"
+}
+
+cmd_verify() {
+  [ $# -ge 1 ] || die "usage: cyberlab verify <lab> [trace.pcap]..."
+  local lab="$1"; shift
+  [ -f "$lab/expect.json" ] || die "no $lab/expect.json (references/mission.md says how to write it)."
+  need_docker; need_tools
+  verify_traces "$(abspath "$lab")" "$@"
+}
+
+cmd_down() {
+  [ $# -eq 1 ] || die "usage: cyberlab down <lab>"
+  need_lab "$1"; need_docker
+  (cd "$1" && docker compose down -v --remove-orphans) || die "docker compose down failed in $1." 2
+  echo "PASS down $1"
+}
+
+cmd_status() { # [lab]: containers, networks and volumes of cyberlab labs (or of one lab)
+  need_docker
+  local want='^cyberlab-'
+  if [ $# -ge 1 ]; then need_lab "$1"; need_tools; want="^$(project_of "$(abspath "$1")")\$"; fi
+  local rows
+  rows="$( { docker ps -a --format 'container {{.Names}} {{.Label "com.docker.compose.project"}}';
+             docker network ls --format 'network {{.Name}} {{.Label "com.docker.compose.project"}}';
+             docker volume ls --format 'volume {{.Name}} {{.Label "com.docker.compose.project"}}'; } |
+           awk -v w="$want" 'NF>=3 && $NF ~ w')"
+  if [ -n "$rows" ]; then echo "$rows"; else echo "no cyberlab lab resources"; fi
+}
+
+cmd_nuke() {
+  need_docker
+  local projs p
+  projs="$( { docker ps -a --format '{{.Label "com.docker.compose.project"}}'; docker network ls --format '{{.Label "com.docker.compose.project"}}'; docker volume ls --format '{{.Label "com.docker.compose.project"}}'; } | grep '^cyberlab-' | sort -u)"
+  [ -n "$projs" ] || { echo "PASS nuke: nothing to remove"; return 0; }
+  for p in $projs; do
+    docker ps -aq --filter "label=com.docker.compose.project=$p" | xargs docker rm -f >/dev/null 2>&1
+    docker network ls -q --filter "label=com.docker.compose.project=$p" | xargs docker network rm >/dev/null 2>&1
+    docker volume ls -q --filter "label=com.docker.compose.project=$p" | xargs docker volume rm >/dev/null 2>&1
+    echo "removed $p"
+  done
+  echo "PASS nuke"
+}
+
+c="${1:-}"; [ $# -gt 0 ] && shift
+case "$c" in
+  doctor) cmd_doctor "$@";; build) cmd_build "$@";; templates) cmd_templates;; new) cmd_new "$@";;
+  check) cmd_check "$@";; run) cmd_run "$@";; craft) cmd_craft "$@";; verify) cmd_verify "$@";;
+  down) cmd_down "$@";; status) cmd_status "$@";; nuke) cmd_nuke;;
+  -h|--help|help) usage;;
+  "") usage; exit 1;;
+  *) die "unknown command '$c'. Run 'cyberlab --help'.";;
+esac

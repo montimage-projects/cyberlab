@@ -1,0 +1,9 @@
+{
+  "max_frames": 10000,
+  "traces": {
+    "capture.pcap": [
+      {"filter": "tcp.port == 6379 && tcp.len > 0", "min": 10, "endpoints": 2},
+      {"filter": "tcp.port == 6379 && tcp.payload contains \"-ERR\"", "min": 1}
+    ]
+  }
+}

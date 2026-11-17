@@ -1,0 +1,24 @@
+# summary: FTP brute force: vsftpd victim (built from pinned Alpine), stdlib ftplib attacker (8 failed logins, ~3 s apart: real vsftpd delay) vs one good login
+# Run: cyberlab run <lab> attack ; cyberlab run <lab> benign      -> out/attack.pcap, out/benign.pcap
+# Contract (cyberlab run): services victim/capture/generator; capture writes /cap/${PCAP}.pcap (copied to out/);
+# the generator reads ${MODE} and exits 0 when done; one internal network; no ports.
+name: cyberlab-ftp-bruteforce
+networks:
+  lab: { driver: bridge, internal: true }
+services:
+  victim:
+    build: ./victim-image
+    networks: [lab]
+  capture:
+    image: ${CYBERLAB_TOOLS:-cyberlab/tools:local}
+    network_mode: "service:victim"
+    command: tcpdump -Z root -i eth0 -B 32768 --immediate-mode -U -w /cap/${PCAP:-attack}.pcap tcp port 21
+    healthcheck: { test: ["CMD", "sh", "-c", "test -s /cap/${PCAP:-attack}.pcap"], interval: 1s, retries: 30 }
+  generator:
+    image: python:3.12-slim
+    networks: [lab]
+    depends_on:
+      victim: { condition: service_started }
+      capture: { condition: service_healthy }
+    volumes: ["./attack.py:/lab/attack.py:ro"]
+    command: python /lab/attack.py victim ${MODE:-attack}

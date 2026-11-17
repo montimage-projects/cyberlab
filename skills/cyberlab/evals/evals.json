@@ -1,0 +1,89 @@
+{
+  "skill_name": "cyberlab",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "happy-path",
+      "prompt": "I'm writing an mmt-security rule for FTP brute force. Set up a lab and give me an attack pcap with at least 5 failed logins and a benign pcap with one normal login, from the same vsftpd server.",
+      "expected_output": "One mission (attack pair), lab generator from the ftp-bruteforce template, expect.json written before generation, attack.pcap and benign.pcap with RESULT PASS, clean teardown, hand-off report.",
+      "files": [],
+      "expectations": [
+        "The run wrote mission.md with exactly one goal and expect.json before the first `cyberlab run`",
+        "The benign expectations assert FTP is present (min >= 1) and 530 replies are absent (max 0)",
+        "`cyberlab run <lab> attack` and `cyberlab run <lab> benign` both ended with RESULT PASS",
+        "The hand-off report starts with `Result: COMPLETE` and lists both traces with frames, sha256 and origin `lab capture`",
+        "`cyberlab status <lab>` printed `no cyberlab lab resources` at the end"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "happy-path",
+      "prompt": "Called by a protocol-plugin generator: produce capture.pcap of Redis RESP traffic under tcp:port=6379 with requests and responses in both directions and at least one error reply. Lab directory: ./redis-capture.",
+      "expected_output": "Mission derived from the caller without questions, protocol-capture template, single trace capture.pcap with endpoints: 2 and an -ERR expectation, RESULT PASS.",
+      "files": [],
+      "expectations": [
+        "The agent asked no clarifying question (the caller is a skill)",
+        "The lab directory is ./redis-capture and holds mission.md, expect.json and out/capture.pcap",
+        "expect.json requires endpoints: 2 on the RESP payload frames",
+        "The run ended with RESULT PASS and the report names origin `lab capture`"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "happy-path",
+      "prompt": "I need a trace of a proprietary telemetry protocol on UDP 5684 for a parser. No implementation exists; here are the messages: client sends 12 01 00 0c 00 00 00 2a de ad be ef, server answers 10 02 00 08 00 00 00 2a.",
+      "expected_output": "Crafted generator chosen with the reason, payloads.txt from the given bytes, `cyberlab craft` with --parent udp:dport=5684, RESULT PASS, report says synthetic.",
+      "files": [],
+      "expectations": [
+        "The brief's Generator line says crafted and gives the no-implementation reason",
+        "The run used `cyberlab craft` (no docker compose lab was started)",
+        "expect.json checks both directions on udp.port == 5684",
+        "The report labels the trace `crafted (synthetic)` and its status is not stated as a lab capture"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "Set up a lab with Suricata, Zeek and an ELK stack, and generate HTTP/2 rapid reset and Log4Shell attacks so I can test everything at once.",
+      "expected_output": "The agent splits the request into two missions (rapid reset; Log4Shell), declines to install Suricata/Zeek/ELK in the lab (out of scope: the caller replays traces with its own tools), and builds minimal labs.",
+      "files": [],
+      "expectations": [
+        "The response states that the analysis tools are out of scope for the lab and that the traces are handed over for replay",
+        "Two lab directories, each with its own mission.md naming one goal",
+        "No Suricata, Zeek or ELK service appears in any docker-compose.yml"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "Use this compose file for the lab, it publishes nginx on 8080 so I can watch it from my browser.",
+      "expected_output": "`cyberlab check` fails on the published port; the agent removes ports: and explains that labs never publish ports.",
+      "files": [],
+      "expectations": [
+        "`cyberlab check` printed `FAIL service victim: publishes ports to the host`",
+        "The final docker-compose.yml has no ports: section",
+        "The lab was not started while the policy failed"
+      ]
+    },
+    {
+      "id": 6,
+      "kind": "negative-trigger",
+      "prompt": "Analyze this pcap and tell me which hosts talk to a C2 server.",
+      "expected_output": "Handled as pcap analysis without the cyberlab workflow.",
+      "files": [],
+      "expectations": [
+        "The run did not invoke `cyberlab` scripts or write a mission brief"
+      ]
+    },
+    {
+      "id": 7,
+      "kind": "negative-trigger",
+      "prompt": "Run a penetration test against our staging server at 10.1.2.3.",
+      "expected_output": "Not handled by cyberlab: labs never target real hosts.",
+      "files": [],
+      "expectations": [
+        "The run did not start a cyberlab lab or point a generator at 10.1.2.3"
+      ]
+    }
+  ]
+}
