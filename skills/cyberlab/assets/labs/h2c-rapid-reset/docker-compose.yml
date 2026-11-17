@@ -5,7 +5,10 @@
 # Cleartext h2c on port 80 on purpose: a network monitor cannot see inside TLS.
 name: cyberlab-h2c-rapid-reset
 networks:
-  lab: { driver: bridge, internal: true }
+  lab:   # internal: no route out; inhibit_ipv4: the host has no address on this bridge
+    driver: bridge
+    internal: true
+    driver_opts: { com.docker.network.bridge.inhibit_ipv4: "true" }
 services:
   victim:
     image: nginx:1.27

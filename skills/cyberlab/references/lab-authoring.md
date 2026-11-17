@@ -11,7 +11,7 @@ Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting]
 | Part | Requirement |
 |---|---|
 | `name:` | `cyberlab-<lab>` (`cyberlab new` sets it; teardown and `nuke` find labs by it) |
-| network | one network, `internal: true`, no `ports:` anywhere |
+| network | one network: `driver: bridge`, `internal: true`, `driver_opts: { com.docker.network.bridge.inhibit_ipv4: "true" }`; no `ports:` anywhere |
 | `victim` | the server under test, on the lab network |
 | `capture` | `image: ${CYBERLAB_TOOLS:-cyberlab/tools:local}`, `network_mode: "service:victim"`, `tcpdump -Z root -i eth0 -B 32768 --immediate-mode -U -w /cap/${PCAP}.pcap <bpf>`, healthcheck `test -s /cap/${PCAP}.pcap` (the trace stays inside the container until `run` copies it to `out/`) |
 | `generator` | the client/attacker; reads `${MODE}`, `depends_on` capture `service_healthy`, sleeps ~2 s, does its work, **exits 0** on success and non-zero on failure |
@@ -41,11 +41,11 @@ Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting]
 `cyberlab check` (and `run`, before starting) refuses a lab containing a symlink, then resolves the compose file with `MODE`/`PCAP` set to each mode of `expect.json` and checks it against an **allowlist**; any key or value not listed fails:
 
 - top level: `name` (`cyberlab-*`), `services`, `networks`, `volumes`;
-- networks: `driver: bridge`, `internal: true`, the default name, no ipam, no external network;
+- networks: `driver: bridge`, `internal: true`, `driver_opts` exactly `com.docker.network.bridge.inhibit_ipv4: "true"` (no host address on the bridge: see `references/safety.md`), the default name, no ipam, no external network;
 - services: `image`, `build` (context inside the lab; `dockerfile`, `args`, `target` only), `command`, `entrypoint`, `environment`, `working_dir`, `user`, `depends_on`, `healthcheck`, `labels`, `hostname`, `expose`, `tmpfs`, `read_only`, `init`, `stop_grace_period`, `stop_signal`, `platform`, `pull_policy`, `stdin_open`, `tty`, `cap_add` (NET_RAW/NET_ADMIN), `cap_drop`, `networks` (declared ones), `network_mode` (`service:<lab service>` or `none`), `volumes` (bind inside the lab, declared lab volumes, tmpfs; never an engine socket), `restart: "no"`;
 - runner contract: `generator` and `capture` exist; `capture` uses the tools image, runs `tcpdump … -w /cap/<trace>`, shares a lab service's network namespace and mounts nothing — so only tcpdump can produce the trace that `run` copies out.
 
-It warns (does not fail) on an image without a pinned tag. While running, `run` also checks every network each container joins is internal, and that no container publishes ports, is privileged or uses the host network.
+It warns (does not fail) on an image without a pinned tag. While running, `run` also checks every lab network is internal with `inhibit_ipv4`, every network each container joins is internal, and that no container publishes ports, is privileged or uses the host network.
 
 ## Failures seen before
 

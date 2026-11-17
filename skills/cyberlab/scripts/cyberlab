@@ -146,6 +146,7 @@ runtime_isolation() { # <project>: verify the RUNNING lab; fails when nothing is
   [ -n "$cons" ] || { echo "FAIL runtime no container found for project $proj"; return 1; }
   for n in $nets; do
     [ "$(docker network inspect -f '{{.Internal}}' "$n")" = true ] || { echo "FAIL runtime network $(docker network inspect -f '{{.Name}}' "$n") is not internal"; bad=1; }
+    [ "$(docker network inspect -f '{{index .Options "com.docker.network.bridge.inhibit_ipv4"}}' "$n")" = true ] || { echo "FAIL runtime network $(docker network inspect -f '{{.Name}}' "$n") gives the host an address (inhibit_ipv4 not set)"; bad=1; }
   done
   for c in $cons; do
     for n in $(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$c"); do

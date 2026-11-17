@@ -5,7 +5,10 @@
 # consumer needs to see. Same contract as the attack templates: victim / generator / capture.
 name: cyberlab-protocol-capture
 networks:
-  lab: { driver: bridge, internal: true }
+  lab:   # internal: no route out; inhibit_ipv4: the host has no address on this bridge
+    driver: bridge
+    internal: true
+    driver_opts: { com.docker.network.bridge.inhibit_ipv4: "true" }
 services:
   victim:
     image: redis:7.4-alpine

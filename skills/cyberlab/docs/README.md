@@ -13,9 +13,9 @@
 
 - One mission, one goal: an attack/benign pcap pair for a detection rule, or a capture of a protocol for a parser.
 - Minimal labs: one victim, one generator, one capture sidecar; no IDS or DPI inside — consumers replay the traces with their own tools.
-- Safety checked three times: a positive policy on the compose file, the running containers and network, and the teardown.
+- Safety checked three times: an allowlist policy on the compose file (internal network, no host address on the bridge), the running containers and network, and the teardown.
 - Expectations first: tshark filters with frame-count bounds in `expect.json`; a trace is done only when they pass.
-- Host needs only Docker (validated on macOS arm64 Docker Desktop; Linux and Windows expected, not yet run); crafted synthetic traces need no network at all.
+- Host needs only Docker (validated on macOS arm64 Docker Desktop and Ubuntu 24.04 arm64; Windows not yet run); crafted synthetic traces need no network at all.
 
 ## When to Use
 

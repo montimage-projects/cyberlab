@@ -13,7 +13,7 @@ Copy `skills/cyberlab/` into your agent's skills directory (for Claude Code: `~/
 ~/.claude/skills/cyberlab/scripts/cyberlab build    # builds cyberlab/tools:local (tcpdump, tshark, python3)
 ```
 
-The host needs only Docker with Compose v2. Validated on macOS (arm64, Docker Desktop); Linux and Windows hosts have not been run yet.
+The host needs only Docker with Compose v2. Validated on macOS (arm64, Docker Desktop) and Ubuntu 24.04 (arm64, Docker Engine); Windows has not been run.
 
 ## Use
 
@@ -38,7 +38,7 @@ The CLI underneath:
 
 | Template | Modes | Result on the reference run |
 |---|---|---|
-| `ftp-bruteforce` | attack, benign | 8 × `530` replies vs one `230` login (vsftpd) |
+| `ftp-bruteforce` | attack, benign | 8 × `530` replies vs one `230` login (ProFTPD, real server delay) |
 | `h2c-rapid-reset` | attack, benign | 100 RST_STREAM frames in ~47 packets vs 100 paced streams (nginx h2c) |
 | `http-payloads` | attack, benign | Log4Shell, SQLi, traversal, XXE, Shellshock strings vs normal requests (nginx) |
 | `port-scan` | attack, benign | 1,024 SYNs / 1,023 RSTs vs 5 HTTP requests |
@@ -46,7 +46,9 @@ The CLI underneath:
 
 ## Safety
 
-Every lab is checked before start (internal networks only, no published ports, no privileged or host namespaces, capabilities limited to NET_RAW/NET_ADMIN, no engine socket, bind mounts inside the lab), while running (networks internal, no ports, not privileged) and after teardown (nothing left). Isolation is Docker-level, not a VM: see `skills/cyberlab/references/safety.md`.
+Every lab is checked before start (an allowlist: internal networks whose bridge gives the host no address, no published ports, no privileged or host namespaces, capabilities limited to NET_RAW/NET_ADMIN, no engine socket, bind mounts inside the lab, a capture that only tcpdump can write), while running (networks internal, no ports, not privileged) and after teardown (nothing left).
+
+Escape tests from inside a lab (public IPs, DNS, `host.docker.internal`, every TCP port the host listens on) were all blocked on macOS (Docker Desktop, arm64) and on Ubuntu 24.04 (Docker Engine, arm64). On Linux, `internal: true` alone still let a lab reach the host's own services through the bridge gateway; the required `com.docker.network.bridge.inhibit_ipv4` option closes that. Isolation is Docker-level, not a VM: see `skills/cyberlab/references/safety.md`.
 
 ## Repository
 

@@ -3,7 +3,7 @@ name: cyberlab
 description: "Set up a minimal isolated lab for one mission and return verified traces: attack/benign pcaps, a protocol capture, or synthetic pcaps from message bytes. Don't use for writing the rule itself, live pentests, or analyzing existing pcaps."
 license: Apache-2.0
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   author: "Luong NGUYEN <luongnv89@users.noreply.github.com>"
 ---
 
@@ -21,7 +21,7 @@ A user or a calling agent says what the lab is **for**; you build the smallest l
 
 ## Prerequisites
 
-- Docker with Compose v2; nothing else on the host. Validated on macOS arm64 Docker Desktop; Linux and Windows hosts are expected to work but have not been run.
+- Docker with Compose v2; nothing else on the host. Validated on macOS arm64 Docker Desktop and Ubuntu 24.04 arm64; Windows has not been run.
 - The tools image (`assets/tools/`: tcpdump, tshark, Python), built by `$S/cyberlab build`.
 - Context budget: read each reference only at the step that names it; the scripts print one line per check, so their output is safe to read in full.
 - cyberlab never runs git, never publishes ports and never reaches the internet from a running lab.

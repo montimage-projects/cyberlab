@@ -10,7 +10,9 @@ resolved, with MODE/PCAP set to the mode being run) and fails on every key or va
 explicitly allowed:
 
   top level   name (cyberlab-*), services, networks, volumes (named, lab-owned)
-  networks    driver bridge, internal: true, name <project>_<key>, empty ipam, labels
+  networks    driver bridge, internal: true, driver_opts exactly
+              com.docker.network.bridge.inhibit_ipv4: "true" (the host gets no address on the lab
+              bridge, so host services are unreachable), name <project>_<key>, empty ipam, labels
   services    image, build (context inside the lab; dockerfile, args, target only), command,
               entrypoint, environment, working_dir, user, depends_on, healthcheck, labels,
               hostname, expose, tmpfs, read_only, init, stop_grace_period, stop_signal, platform,
@@ -30,7 +32,8 @@ import os
 import sys
 
 TOP_KEYS = {"name", "services", "networks", "volumes"}
-NET_KEYS = {"name", "driver", "internal", "ipam", "labels"}
+NET_KEYS = {"name", "driver", "internal", "ipam", "labels", "driver_opts"}
+INHIBIT = "com.docker.network.bridge.inhibit_ipv4"
 VOL_KEYS = {"name", "labels", "driver"}
 SVC_KEYS = {"image", "build", "command", "entrypoint", "environment", "working_dir", "user",
             "depends_on", "healthcheck", "labels", "hostname", "expose", "tmpfs", "read_only",
@@ -180,7 +183,7 @@ def main():
 
     networks = cfg.get("networks") or {}
     if not networks:
-        r.fail("networks", "none declared", "declare networks: { lab: { driver: bridge, internal: true } }")
+        r.fail("networks", "none declared", f"declare networks: {{ lab: {{ driver: bridge, internal: true, driver_opts: {{ {INHIBIT}: \"true\" }} }} }}")
     for n, spec in networks.items():
         spec, problems = spec or {}, []
         if set(spec) - NET_KEYS:
@@ -193,8 +196,14 @@ def main():
             problems.append(f"name {spec.get('name')} points at a network outside the lab")
         if spec.get("ipam") not in (None, {}):
             problems.append("custom ipam")
+        opts = spec.get("driver_opts") or {}
+        if str(opts.get(INHIBIT, "")).lower() != "true":
+            problems.append(f"driver_opts {INHIBIT} is not \"true\", so the host keeps an address on the bridge and its services are reachable from the lab")
+        if set(opts) - {INHIBIT}:
+            problems.append(f"other driver_opts {sorted(set(opts) - {INHIBIT})}")
         if problems:
-            r.fail(f"network {n}", ", ".join(problems), "declare it as { driver: bridge, internal: true } and nothing else")
+            r.fail(f"network {n}", ", ".join(problems),
+                   f"declare it as {{ driver: bridge, internal: true, driver_opts: {{ {INHIBIT}: \"true\" }} }} and nothing else")
         else:
             r.ok(f"network {n} internal")
 

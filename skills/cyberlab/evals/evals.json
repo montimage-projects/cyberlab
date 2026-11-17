@@ -4,7 +4,7 @@
     {
       "id": 1,
       "kind": "happy-path",
-      "prompt": "I'm writing an mmt-security rule for FTP brute force. Set up a lab and give me an attack pcap with at least 5 failed logins and a benign pcap with one normal login, from the same vsftpd server.",
+      "prompt": "I'm writing an mmt-security rule for FTP brute force. Set up a lab and give me an attack pcap with at least 5 failed logins and a benign pcap with one normal login, from the same FTP server.",
       "expected_output": "One mission (attack pair), lab generator from the ftp-bruteforce template, expect.json written before generation, attack.pcap and benign.pcap with RESULT PASS, clean teardown, hand-off report.",
       "files": [],
       "expectations": [

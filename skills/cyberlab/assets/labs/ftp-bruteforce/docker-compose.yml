@@ -1,10 +1,13 @@
-# summary: FTP brute force: vsftpd victim (built from pinned Alpine), stdlib ftplib attacker (8 failed logins, ~3 s apart: real vsftpd delay) vs one good login
+# summary: FTP brute force: ProFTPD victim (built from pinned Debian), stdlib ftplib attacker (8 failed logins with the real server delay) vs one good login
 # Run: cyberlab run <lab> attack ; cyberlab run <lab> benign      -> out/attack.pcap, out/benign.pcap
 # Contract (cyberlab run): services victim/capture/generator; capture writes /cap/${PCAP}.pcap (copied to out/);
 # the generator reads ${MODE} and exits 0 when done; one internal network; no ports.
 name: cyberlab-ftp-bruteforce
 networks:
-  lab: { driver: bridge, internal: true }
+  lab:   # internal: no route out; inhibit_ipv4: the host has no address on this bridge
+    driver: bridge
+    internal: true
+    driver_opts: { com.docker.network.bridge.inhibit_ipv4: "true" }
 services:
   victim:
     build: ./victim-image

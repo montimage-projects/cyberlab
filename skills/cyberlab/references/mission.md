@@ -82,7 +82,7 @@ Write `<lab>/expect.json` **before** generating: `run` and `craft` refuse a trac
 
 **A rule generator needs evidence for an FTP brute-force rule.** The caller states: FTP, failed logins in a time window, the rule must stay silent on a normal login.
 
-- Mission: "Produce an attack/benign pair of FTP logins against vsftpd: ≥5 failed logins in the attack, one successful login in the benign".
+- Mission: "Produce an attack/benign pair of FTP logins against a real FTP server: ≥5 failed logins in the attack, one successful login in the benign".
 - Generator: lab (a time window needs real server delays).
 - Template: `ftp-bruteforce`; expectations as in the JSON above.
 
