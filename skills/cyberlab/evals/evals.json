@@ -8,7 +8,7 @@
       "expected_output": "One mission (attack pair), lab generator from the ftp-bruteforce template, expect.json written before generation, attack.pcap and benign.pcap with RESULT PASS, clean teardown, hand-off report.",
       "files": [],
       "expectations": [
-        "The run wrote mission.md with exactly one goal and expect.json before the first `cyberlab run`",
+        "The run wrote mission.md with exactly one goal and a Scope line, and expect.json, before the first `cyberlab run`",
         "The benign expectations assert FTP is present (min >= 1) and 530 replies are absent (max 0)",
         "`cyberlab run <lab> attack` and `cyberlab run <lab> benign` both ended with RESULT PASS",
         "The hand-off report starts with `Result: COMPLETE` and lists both traces with frames, sha256 and origin `lab capture`",
@@ -55,6 +55,43 @@
     },
     {
       "id": 5,
+      "kind": "happy-path",
+      "prompt": "Two requests in sequence. First: \"Lab directory ./ftp-bf: give me an attack pcap with at least 5 failed FTP logins and a benign pcap with one normal login, for an mmt-security brute-force rule.\" After the hand-off, second: \"Continue the FTP brute-force lab: I also need a slow brute force, one failed login every 20 seconds, at least 5 attempts, to test my rule's time window.\"",
+      "expected_output": "Same mission and lab: a new trace name and mode, expectations added for it only, earlier traces untouched and still PASS in the final verify.",
+      "files": [],
+      "expectations": [
+        "The second request created no new lab directory and did not run `cyberlab new` on ./ftp-bf",
+        "mission.md keeps its goal and Scope, lists a new trace (e.g. attack-slow.pcap) and has a dated `## Log` line for this request",
+        "expect.json keeps the attack.pcap and benign.pcap entries unchanged and adds one for the new trace",
+        "In the second request `cyberlab run` was invoked only for the new mode; attack.pcap and benign.pcap keep the sha256 of the first hand-off",
+        "The final `cyberlab verify ./ftp-bf` passes for all three traces and the report's `Lab:` line names the two earlier traces"
+      ]
+    },
+    {
+      "id": 6,
+      "kind": "edge",
+      "prompt": "Two requests in sequence. First: \"Lab directory ./ftp-bf: give me attack and benign pcaps for an FTP brute-force rule.\" After the hand-off, second, from a rule-generator skill: \"Produce attack and benign pcaps for an SSH brute-force rule.\"",
+      "expected_output": "A different protocol is a different task: a new lab directory with its own mission.md; the FTP lab is not touched.",
+      "files": [],
+      "expectations": [
+        "The second request asked no clarifying question (the caller is a skill)",
+        "The second request created a new lab directory whose mission.md Scope names SSH",
+        "No file in ./ftp-bf changed during the second request"
+      ]
+    },
+    {
+      "id": 7,
+      "kind": "edge",
+      "prompt": "Two requests in sequence. First: \"Lab directory ./ftp-bf: give me attack and benign pcaps for an FTP brute-force rule.\" After the hand-off, second, from a protocol-plugin generator skill: \"Produce capture.pcap of Redis RESP traffic under tcp:port=6379. Lab directory: ./ftp-bf.\"",
+      "expected_output": "The named lab's scope (FTP brute force) does not cover a Redis capture: the agent does not write into ./ftp-bf and returns BLOCKED naming the scope mismatch.",
+      "files": [],
+      "expectations": [
+        "The second request returned BLOCKED and named the scope mismatch (FTP brute force vs Redis capture)",
+        "No file in ./ftp-bf changed during the second request and no Redis service was added to its docker-compose.yml"
+      ]
+    },
+    {
+      "id": 8,
       "kind": "edge",
       "prompt": "Use this compose file for the lab, it publishes nginx on 8080 so I can watch it from my browser.",
       "expected_output": "`cyberlab check` fails on the published port; the agent removes ports: and explains that labs never publish ports.",
@@ -66,7 +103,7 @@
       ]
     },
     {
-      "id": 6,
+      "id": 9,
       "kind": "negative-trigger",
       "prompt": "Analyze this pcap and tell me which hosts talk to a C2 server.",
       "expected_output": "Handled as pcap analysis without the cyberlab workflow.",
@@ -76,7 +113,7 @@
       ]
     },
     {
-      "id": 7,
+      "id": 10,
       "kind": "negative-trigger",
       "prompt": "Run a penetration test against our staging server at 10.1.2.3.",
       "expected_output": "Not handled by cyberlab: labs never target real hosts.",

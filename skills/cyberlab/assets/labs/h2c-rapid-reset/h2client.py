@@ -1,5 +1,8 @@
 import socket, sys, time, h2.connection, h2.config
-host, mode, n = sys.argv[1], sys.argv[2], int(sys.argv[3]); time.sleep(3)
+host, mode, n = sys.argv[1], sys.argv[2], int(sys.argv[3])
+if mode not in ("attack", "benign"):
+    sys.exit(f"Error: mode '{mode}' is not attack or benign. Add a branch for it here before adding the trace.")
+time.sleep(3)
 s = socket.create_connection((host, 80)); c = h2.connection.H2Connection(h2.config.H2Configuration(client_side=True))
 c.initiate_connection(); s.sendall(c.data_to_send())
 for i in range(n):

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# cyberlab — build and run a minimal, isolated lab that produces the traces of ONE mission.
+# cyberlab — build and run a minimal, isolated lab that produces the traces of ONE mission
+# (one task: one protocol or attack and its consumer). A mission's lab holds as many traces as
+# the task needs and is reused for later work on the same task; an unrelated task gets a new lab.
 # The host needs only docker (Compose v2). Every check runs in the small tools image
 # (tcpdump, tshark, python3); a lab is one victim, one generator and one capture sidecar.
 #
@@ -7,6 +9,8 @@
 #   doctor                        check docker, compose and the tools image
 #   build                         build the tools image (cyberlab/tools:local)
 #   templates                     list the lab templates
+#   labs [dir]                    list mission labs under dir (default $CYBERLAB_HOME or
+#                                 ~/.cache/cyberlab): goal, scope and traces, to find one to continue
 #   new <dir> --from <template>   copy a template into a lab directory (keeps an existing
 #                                 mission.md and expect.json; refuses an existing lab)
 #   check <lab>                   isolation policy check of the lab's resolved compose file
@@ -109,6 +113,20 @@ cmd_templates() {
   done
 }
 
+cmd_labs() { # [dir]: mission labs (dirs holding mission.md) with goal, scope and traces
+  local home="${1:-${CYBERLAB_HOME:-$HOME/.cache/cyberlab}}" d found=0
+  [ -d "$home" ] || { echo "no labs: $home does not exist"; return 0; }
+  for d in "$home"/*/; do
+    [ -f "$d/mission.md" ] || continue
+    found=1
+    echo "${d%/}"
+    echo "  goal:   $(sed -n 's/^# *Mission: *//p' "$d/mission.md" | head -1)"
+    echo "  scope:  $(sed -n 's/^- *Scope: *//p' "$d/mission.md" | head -1)"
+    echo "  traces: $(cd "$d" && ls out/*.pcap 2>/dev/null | sed 's|^out/||' | tr '\n' ' ')"
+  done
+  [ "$found" = 1 ] || echo "no labs with a mission.md under $home"
+}
+
 cmd_new() {
   local dir="${1:-}" from=""; [ $# -gt 0 ] && shift
   [ -n "$dir" ] || die "usage: cyberlab new <dir> --from <template>"
@@ -116,7 +134,7 @@ cmd_new() {
   local list; list="$(ls "$SKILL_DIR/assets/labs" | tr '\n' ' ')"
   [ -n "$from" ] || die "new: missing --from <template>. Templates: $list"
   [ -d "$SKILL_DIR/assets/labs/$from" ] || die "new: no template '$from'. Templates: $list"
-  [ -e "$dir/docker-compose.yml" ] && die "new: $dir already holds a lab (docker-compose.yml); nothing was overwritten. Pick a new directory."
+  [ -e "$dir/docker-compose.yml" ] && die "new: $dir already holds a lab (docker-compose.yml); nothing was overwritten. To add traces to this mission, keep this lab and skip new; for an unrelated task pick a new directory."
   mkdir -p "$dir" || die "new: cannot create $dir."
   cp -Rn "$SKILL_DIR/assets/labs/$from/." "$dir/" 2>/dev/null   # -n keeps mission.md/expect.json; BSD cp exits 1 when it skips
   [ -f "$dir/docker-compose.yml" ] || die "new: cannot copy the template into $dir."
@@ -306,7 +324,7 @@ cmd_nuke() {
 
 c="${1:-}"; [ $# -gt 0 ] && shift
 case "$c" in
-  doctor) cmd_doctor "$@";; build) cmd_build "$@";; templates) cmd_templates;; new) cmd_new "$@";;
+  doctor) cmd_doctor "$@";; build) cmd_build "$@";; templates) cmd_templates;; labs) cmd_labs "$@";; new) cmd_new "$@";;
   check) cmd_check "$@";; run) cmd_run "$@";; craft) cmd_craft "$@";; verify) cmd_verify "$@";;
   down) cmd_down "$@";; status) cmd_status "$@";; nuke) cmd_nuke;;
   -h|--help|help) usage;;
