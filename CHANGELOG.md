@@ -44,7 +44,7 @@
 
 ### Documentation
 
-- Add the cyberLab logo: a sealed lab with a captured trace that ends in a check mark, in the MMT amber palette. `assets/logo/` holds 7 SVG variants (mark, full, wordmark, app icon, favicon, white, black), PNG exports in `assets/logo/png/`, and `brand-showcase.html`. The README header shows the logo, with the white variant in GitHub dark mode.
+- Add the cyberLab logo: a sealed lab with a captured trace that ends in a check mark, in the MMT amber palette. `assets/logo/` holds 8 SVG variants (mark, full, full for dark backgrounds, wordmark, app icon, favicon, white, black), PNG exports in `assets/logo/png/`, and `brand-showcase.html`. The README header follows the GitHub theme: the full logo in light mode, the dark-background color version in dark mode.
 
 ## v1.2.0 — 2026-11-18
 
