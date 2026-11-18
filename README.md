@@ -1,6 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/logo-white.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/logo-full-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/logo/logo-full.svg">
     <img src="assets/logo/logo-full.svg" alt="cyberLab" width="320">
   </picture>
 </p>
