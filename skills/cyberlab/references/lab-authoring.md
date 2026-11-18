@@ -16,7 +16,9 @@ Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting]
 | `capture` | `image: ${CYBERLAB_TOOLS:-cyberlab/tools:local}`, `network_mode: "service:victim"`, `tcpdump -Z root -i eth0 -B 32768 --immediate-mode -U -w /cap/${PCAP}.pcap <bpf>`, healthcheck `test -s /cap/${PCAP}.pcap` (the trace stays inside the container until `run` copies it to `out/`) |
 | `generator` | the client/attacker; reads `${MODE}`, `depends_on` capture `service_healthy`, sleeps ~2 s, does its work, **exits 0** on success and non-zero on failure |
 
-`run` checks the policy, starts the lab, checks the running containers and network, waits for `generator` (`CYBERLAB_TIMEOUT`, default 300 s), waits 2 s for libpcap to flush, stops `capture` and fails if tcpdump reports any packet dropped by the kernel, tears everything down, checks nothing is left, writes `out/<mode>.pcap`, `out/<mode>.provenance.json` (command, `MODE`/`PCAP`, resolved services, image IDs and registry digests, Dockerfile base images, sha256 of every lab file, tool and Docker versions) and `out/<mode>.generator.log`, verifies the trace against `expect.json`, then writes `out/<mode>.md`, the trace's reproduction document.
+`run` checks the policy, starts the lab, records the address Docker gave each service (`NOTE address generator=…, victim=…`: they change on every run), checks the running containers and network, waits for `generator` (`CYBERLAB_TIMEOUT`, default 300 s), waits 2 s for libpcap to flush, stops `capture` and fails if tcpdump reports any packet dropped by the kernel, tears everything down, checks nothing is left, writes `out/<mode>.pcap`, `out/<mode>.provenance.json` (command, `MODE`/`PCAP`, resolved services and their addresses, image IDs and registry digests, Dockerfile base images, sha256 of every lab file, tool and Docker versions) and `out/<mode>.generator.log`, verifies the trace against `expect.json`, then writes `out/<mode>.md`, the trace's document: it opens with who is who (each address, its role and lab service) and draws the exchange as Mermaid diagrams.
+
+Keep the service names `generator` (attacker or client) and `victim` (victim or server): the trace document names the parties from them. Start the generator with its ~2 s sleep, so it still runs when `run` reads its address.
 
 ## Templates
 
@@ -35,7 +37,7 @@ Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting]
 3. Modes: one `MODE` value per trace (the trace name without `.pcap`); the same server for every trace. An unknown mode must make the generator exit non-zero, never fall back to another mode's traffic.
 4. Capture filter: the protocol's traffic in both directions and the replies it causes, and nothing else. A port filter alone drops replies a detector or reader needs: add `icmp` (or `icmp6`) for UDP or IP-level traffic (port unreachable, fragmentation errors), and the data connections when the mission is about them (FTP active/passive). Write an expectation for the replies, so a filter that drops them fails.
 5. `expect.json`: written from the mission before the first run (`references/mission.md`).
-6. `mechanism.md`: the template's explanation of the attack, with references. Rewrite it when the attack, server or variant changes (`references/mission.md` → *Mechanism*).
+6. `mechanism.md`: the template's explanation of the attack: who is who, a sequence diagram of the exchange, one diagram per trace, and references. Rewrite it, diagrams included, when the attack, server or variant changes (`references/mission.md` → *Mechanism*, *Mermaid diagrams*).
 7. Template leftovers: remove comments, config directives, modes and payload files that serve the template's attack and not this mission (e.g. brute-force delay settings in a lab that now does a bounce scan).
 
 ## Adding a trace
