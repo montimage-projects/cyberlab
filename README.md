@@ -1,9 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/logo-full-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="assets/logo/logo-full.svg">
-    <img src="assets/logo/logo-full.svg" alt="cyberLab" width="320">
-  </picture>
+  <img src="assets/logo/logo-badge.svg" alt="cyberLab" width="276">
 </p>
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
