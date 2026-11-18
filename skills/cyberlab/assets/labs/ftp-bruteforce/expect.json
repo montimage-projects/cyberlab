@@ -1,12 +1,15 @@
 {
   "traces": {
     "attack.pcap": [
-      {"filter": "ftp.response.code == 530", "min": 5},
+      {"filter": "ftp.response.code == 530", "min": 5, "claim": "failed logins answered by 530"},
+      {"filter": "ftp.request.command == \"PASS\"", "distinct": "tcp.srcport", "min": 5, "claim": "each attempt on its own TCP connection"},
+      {"filter": "ftp.response.code == 230", "max": 0, "claim": "no guess succeeds"},
       {"filter": "ftp", "min": 1, "endpoints": 2}
     ],
     "benign.pcap": [
-      {"filter": "ftp.response.code == 230", "min": 1},
-      {"filter": "ftp.response.code == 530", "max": 0},
+      {"filter": "ftp.response.code == 230", "min": 1, "claim": "one successful login"},
+      {"filter": "ftp.response.code == 530", "max": 0, "claim": "no 530 reply"},
+      {"filter": "ftp.request.command == \"PASS\"", "max": 1, "claim": "one login attempt"},
       {"filter": "ftp", "min": 1, "endpoints": 2}
     ]
   }

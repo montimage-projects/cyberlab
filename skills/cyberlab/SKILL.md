@@ -62,7 +62,7 @@ Apply `references/mission.md` → *Choose the generator*: a **lab** for timing, 
 
 ## Step 3 — Write the expectations
 
-Write `<lab>/expect.json` from the brief before generating anything, using the defaults of `references/mission.md` → *Mission shapes*. In a continued lab, add entries for the new traces only; an existing trace's expectations change only when its brief line was wrong (say so). A benign trace asserts the protocol is present (`min` ≥ 1, `endpoints: 2`), not only that the attack is absent; a protocol capture asserts both directions. Done when every trace in the brief has an expectation (`run` and `craft` refuse a trace without one).
+Write `<lab>/expect.json` from the brief before generating anything, using the defaults of `references/mission.md` → *Mission shapes*. Every claim in a `Traces:` line (count, rate, pacing, variety, field relation, variant) gets an expectation tagged `"claim"`, and a rule the consumer named is checked from both sides: the attack above its threshold in its window, the benign trace under it (`references/mission.md` → *Expectations*). In a continued lab, add entries for the new traces only; an existing trace's expectations change only when its brief line was wrong (say so). A benign trace asserts the protocol is present (`min` ≥ 1, `endpoints: 2`), not only that the attack is absent; a protocol capture asserts both directions. Done when every trace in the brief has an expectation (`run` and `craft` refuse a trace without one), and every claim of its `Traces:` line has a check.
 
 ## Step 4 — Build the lab
 
@@ -70,7 +70,7 @@ Write `<lab>/expect.json` from the brief before generating anything, using the d
 
 1. Run `$S/cyberlab templates`.
 2. Run `$S/cyberlab new <lab> --from <closest template>`. It copies the template into the lab directory and keeps the `mission.md` and `expect.json` you already wrote.
-3. Change only what the mission needs: victim image and version, generator, modes, capture filter.
+3. Change only what the mission needs: victim image and version, generator, modes, capture filter. Then remove what the template carried for its own attack and this lab no longer does: comments, config directives, modes, payload files and `mechanism.md` text (`grep -ri` the lab for the template's attack terms). A leftover misleads whoever reproduces the trace.
 4. Run `$S/cyberlab check <lab>`. Fix each `FAIL` line until it prints `RESULT PASS isolation policy`.
 5. Write `<lab>/mechanism.md` (`references/mission.md` → *Mechanism*). `new` copied the template's: change it to match what this lab sends.
 
@@ -120,7 +120,7 @@ Result: COMPLETE | PARTIAL | BLOCKED — <goal from the brief>
 Traces: <path> (<frames> frames, sha256 <first 16>, origin: lab capture | crafted (synthetic), doc <path>.md) — one line per trace this request produced
 Lab: <lab directory>; also holds <earlier trace names, each PASS/FAIL from verify> (continued lab only)
 Evidence: <each expectation with its count, from verify>; lab: policy, runtime, teardown and capture-drop checks PASS (crafted: "no network used")
-Uncertainty: <ASSUMED values; synthetic traces; timing not real if crafted; Docker-level isolation; differences between the brief and the trace found in Step 6; anything not verified>
+Uncertainty: <ASSUMED values; synthetic traces; timing not real if crafted; Docker-level isolation; differences between the brief and the trace found in Step 6; a rule whose logic would also match the benign trace; expected verdicts not confirmed by running the detector; anything not verified>
 Decision: <what the caller or user must decide, or "No approval needed.">
 ```
 
@@ -129,6 +129,7 @@ Decision: <what the caller or user must decide, or "No approval needed.">
 - Name `out/<trace>.md` (the reproduction document), `out/<trace>.provenance.json` and `out/verify.json` as the full evidence; do not paste them.
 - Reproduction: a crafted trace from `craft_pcap.py` reproduces byte for byte (same sha256); a lab capture reproduces as an equivalent trace that passes the same expectations, never the same file (timestamps, sequence numbers, ports and addresses change). Say which applies when the caller asks for reproducible traces.
 - When the caller is a person and has not replied, their understanding of the traces is unconfirmed: say so.
+- Verdicts (`fires` / `stays silent`) are expectations from the rule's condition: cyberlab never runs the detector. Say so, and that the consumer confirms them by replaying the traces.
 
 ## Step Completion Reports
 

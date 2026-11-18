@@ -12,7 +12,7 @@ You (or a calling agent) say what the lab is for. The skill writes a one-goal mi
 
 - **One mission, one task:** one lab directory per task (one protocol or attack, for one consumer), holding as many traces as the task needs. Come back later for another variant, threshold or error case and the skill adds traces to the same lab (`cyberlab labs` lists them); an unrelated task gets its own lab.
 - **Minimal labs:** one victim, one generator and one capture sidecar on an internal Docker network.
-- **Expectations first:** `expect.json` holds tshark filters with frame-count bounds per trace. `run` and `craft` refuse a trace that has no expectation, and a trace is done only when its expectations pass.
+- **Expectations first:** `expect.json` holds tshark filters with bounds per trace: frame or message counts, the most matches in a time window (`window`), distinct field values (`distinct`) and spacing (`gap_min`/`gap_max`), so every claim in the brief, rule thresholds included, is checked. `run` and `craft` refuse a trace that has no expectation, and a trace is done only when its expectations pass.
 - **Isolation checked three times:** an allowlist policy on the compose file before start, the running containers and networks, and the teardown (see [Safety](#safety)).
 - **Crafted traces when no implementation exists:** payloads behind real Ethernet/IP/TCP/UDP headers, written with no network and labelled synthetic.
 - **Attack mechanism:** each lab has a `mechanism.md` with how the attack (or protocol) works, what each trace shows of it, and links to the CVE, RFC, MITRE ATT&CK or vendor write-up. Every template ships one.

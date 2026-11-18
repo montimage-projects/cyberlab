@@ -1,41 +1,21 @@
 {
   "traces": {
     "attack.pcap": [
-      {
-        "filter": "http.request",
-        "min": 6
-      },
-      {
-        "filter": "http.user_agent contains \"jndi\"",
-        "min": 1
-      },
-      {
-        "filter": "http.request.uri contains \"../\"",
-        "min": 1
-      },
-      {
-        "filter": "http.response",
-        "min": 6
-      }
+      {"filter": "http.request", "min": 6},
+      {"filter": "http.user_agent contains \"jndi:\"", "min": 1, "claim": "Log4Shell in User-Agent"},
+      {"filter": "http.request.uri contains \"%7Bjndi\"", "min": 1, "claim": "Log4Shell in the URL, URL-encoded"},
+      {"filter": "http.request.uri contains \"%27%20OR%20\"", "min": 1, "claim": "SQL injection"},
+      {"filter": "http.request.uri contains \"../\"", "min": 1, "claim": "path traversal"},
+      {"filter": "http.request.method == \"POST\" && http contains \"<!ENTITY\"", "min": 1, "claim": "XXE body"},
+      {"filter": "http.user_agent contains \"() {\"", "min": 1, "claim": "Shellshock in User-Agent"},
+      {"filter": "http.response", "min": 6}
     ],
     "benign.pcap": [
-      {
-        "filter": "http.request",
-        "min": 5
-      },
-      {
-        "filter": "http",
-        "min": 1,
-        "endpoints": 2
-      },
-      {
-        "filter": "http contains \"jndi\" || http contains \"DOCTYPE\"",
-        "max": 0
-      },
-      {
-        "filter": "http.response.code == 200",
-        "min": 5
-      }
+      {"filter": "http.request", "min": 5},
+      {"filter": "http", "min": 1, "endpoints": 2},
+      {"filter": "http contains \"jndi\" || http contains \"DOCTYPE\" || http contains \"<!ENTITY\" || http contains \"() {\" || http.request.uri contains \"../\" || http.request.uri contains \"%27\"", "max": 0, "claim": "none of the attack markers"},
+      {"filter": "http.request.method == \"POST\" && http contains \"<?xml\"", "min": 1, "claim": "an XML POST without a DOCTYPE"},
+      {"filter": "http.response.code == 200", "min": 5}
     ]
   }
 }

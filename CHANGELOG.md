@@ -13,6 +13,14 @@
   - The skill writes or adapts it in Step 4. It cites only sources whose content it has checked (or marks a link `(link not checked)`) and never invents a URL, CVE or technique ID.
   - Each trace section names the rule it targets and the expected verdict (fires / stays silent).
   - In Step 6 the skill checks the text against the trace actually captured. A difference that breaks the mission sends the trace back to Step 5, not into the text.
+- `expect.json` can check what a time-window rule keys on: `window` (the most matches in any T-second window), `distinct` (distinct values of a field), `gap_min` / `gap_max` (spacing between consecutive matches), and `claim` (the sentence of the brief an expectation proves). Unknown keys now fail the check instead of being ignored.
+- Close the workflow gaps that let traces differ from their description (found by documenting 108 existing traces):
+  - Every claim in a `Traces:` line gets an expectation: a count, rate, pacing, variety, relation between fields or variant.
+  - A rule the consumer named is checked from both sides: the attack above its threshold in the rule's window, the benign trace under it.
+  - Capture filters keep the replies the traffic causes, e.g. ICMP for UDP or IP-level traffic.
+  - Adapting a template removes the template's leftovers.
+  - Crafted traces that imitate a documented attack take their field values from the source.
+  - The hand-off says verdicts are expected, not confirmed by running the detector.
 - `cyberlab doc` (and `run`, `craft`, `verify`) prints a `WARN doc` line for each gap in a trace's document: no `Traces:` line, no `mechanism.md` or section, no references, not verified or failing, lab inputs not recorded or changed since generation. Step 6 requires none for the request's traces.
 - Record what reproduction needs in `out/<trace>.provenance.json`:
   - the cyberlab version, the exact command, and `MODE`/`PCAP`/`CYBERLAB_TIMEOUT`;

@@ -30,3 +30,5 @@ cyberlab craft <lab> attack.pcap --script gen.py -- <args>
 - Always an Ethernet link layer and, for TCP, a full handshake before payloads: dissectors classify flows from them.
 - A crafted trace never replaces a lab capture silently: the brief's generator line and the hand-off report both say **synthetic**.
 - Timing, rate and segmentation claims cannot rest on a crafted trace.
+- Imitating a documented attack (a published implant, a CVE proof of concept, a tool's packets): take every distinguishing field value from the cited source, name the source in `mechanism.md`, and write one expectation per documented field (e.g. the sequence/acknowledgement relation, flags, options). A crafted trace that differs from its source shows only how its author read it.
+- A derived trace (an edited copy of a lab capture) states in its `Traces:` line what was changed. Its expectations check the changed fields, and the timing it claims (`gap_min` / `gap_max`, `window`).

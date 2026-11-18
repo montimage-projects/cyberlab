@@ -13,7 +13,7 @@ Write `<lab>/mission.md` with exactly these lines (`ASSUMED:` in front of each v
 - Scope: <the task boundary later requests are tested against: protocol, attack or behaviour, server; e.g. "FTP brute force against vsftpd/proftpd, for an mmt-security rule">
 - Consumer: <who uses the traces: a person, or a calling skill/agent and what it does with them>
 - Protocol: <protocol, transport and port, e.g. FTP over TCP 21; for a new protocol, its parent selector, e.g. tcp:port=2208>
-- Traces: <file name> — <what must be visible in it>   (one line per trace; as many as the task needs)
+- Traces: <file name> — <what must be visible in it>; [rule <N>: <its condition and threshold, e.g. >20 A-ASSOCIATE-RQ in 5 s>; fires | stays silent]   (one line per trace; as many as the task needs; the rule part when the consumer named a rule)
 - Generator: <crafted | lab> — <why, from the table below>
 - Server/client: <images or implementations used, with versions>   (lab only)
 - Destination: <lab directory>; <where the consumer will copy the traces, if it said>
@@ -92,6 +92,23 @@ Write `<lab>/expect.json` **before** generating: `run` and `craft` refuse a trac
 - Every trace is also checked for a readable file, Ethernet / Linux cooked / raw IP link type, and 1..`max_frames` frames.
 - A **benign** trace must assert that the protocol is present (`min` ≥ 1), not only that the attack is absent: an empty benign trace proves nothing.
 - Write the filters from the mission, never from what a trace happened to contain.
+- **Every claim in a `Traces:` line gets an expectation**, tagged with `"claim"`. An unchecked claim is how a trace ends up showing something else than its description. Map each kind of claim to a check:
+
+  | Claim in the brief | Expectation |
+  |---|---|
+  | a count ("8 failed logins", "1,024 SYNs") | `min` / `max` |
+  | a rate or time window ("30 associations in 3 s", "100 CAM in 1 s") | `window` with `min` (most matches in any T-second window) |
+  | a pacing ("one attempt every 20 s", "1 ms apart", "2 s later") | `gap_min` / `gap_max` |
+  | variety ("different ports", "4 station IDs", "8 PORT arguments") | `distinct` with `min` |
+  | a relation between fields ("to a third host", "spoofed source", "same NAS SQN") | a field comparison in the filter: `ftp.active.cip != ip.src`, `ip.src != 10.0.0.2` |
+  | a variant or marker (each payload, each message type, each reply type) | one filtered expectation per variant |
+  | both directions | `endpoints: 2` |
+
+- **Rule thresholds.** When the consumer named a rule, read its condition (`Traces:` line, or the rule itself when you have it) and check it from both sides:
+  - an attack trace exceeds the threshold inside the rule's own window, e.g. `{"filter": "<the rule's event>", "window": 5, "min": 21}` for ">20 in 5 s";
+  - a benign or control trace stays under every condition the rule tests, with the same filter and window and `"max": <threshold>`. The absence of the attack marker is not enough: a benign trace that meets the rule's condition is an attack trace for that rule.
+  - If the rule's logic would match a benign trace whatever the traffic (a check on a field normal traffic always has), keep the trace, write `max` for what the trace really is, and report the rule's limit under Uncertainty.
+- Check that a filter compiles and selects what you mean before relying on it (`$` followed by `{` starts a tshark macro: match `jndi:` instead of `${jndi:`): an expectation that matches nothing proves nothing (`max: 0` on a misspelt field always passes). Unknown keys fail the check.
 - Check that a dissector and its fields exist before using them: `docker run --rm --network none cyberlab/tools:local tshark -G protocols | grep -i <proto>` (or `-G fields`). Reading the field list touches no trace.
 - When the protocol has no tshark dissector, filter on the transport: `tcp.port == 2208 && tcp.len > 0`, or `tcp.payload contains "<marker>"`.
 
@@ -129,7 +146,7 @@ How this lab produces it: server, client, any change from the real-world attack 
 
 | Shape | Traces | Default expectations |
 |---|---|---|
-| **Attack pair** (detection rule) | `attack.pcap`, `benign.pcap` from the same server | attack: the attack messages with a minimum count, both endpoints; benign: the protocol present with both endpoints, the attack marker `max: 0` |
+| **Attack pair** (detection rule) | `attack.pcap`, `benign.pcap` from the same server | attack: the attack messages with a minimum count (and `window` above the rule's threshold), both endpoints; benign: the protocol present with both endpoints, the attack marker `max: 0`, and the rule's event under its threshold in the same `window` |
 | **Protocol capture** (parser/plugin) | `capture.pcap` | the protocol's payload frames under its parent, `endpoints: 2` (both directions), each message type the consumer named, `max_frames` 10000 |
 | **Variant set** (one attack, several encodings) | `attack.pcap` holding every variant, `benign.pcap` | one expectation per variant marker |
 | **Growing set** (a reused lab) | the traces above plus one per later request: `attack-<variant>.pcap`, `benign-<profile>.pcap`, `capture-<case>.pcap` | each new trace gets its own entry; existing entries stay as they are |

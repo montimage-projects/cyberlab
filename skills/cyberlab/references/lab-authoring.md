@@ -33,9 +33,10 @@ Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting]
 1. Victim: the server image the mission names, pinned to a version tag (or a digest). Mount its config read-only from the lab directory.
 2. Generator: the smallest client that produces the traffic. Standard library on `python:3.12-slim` when possible; otherwise a `build:` directory whose Dockerfile installs pinned packages (the build has network access, the running lab does not).
 3. Modes: one `MODE` value per trace (the trace name without `.pcap`); the same server for every trace. An unknown mode must make the generator exit non-zero, never fall back to another mode's traffic.
-4. Capture filter: the protocol's port only, so the trace stays small and on-mission.
+4. Capture filter: the protocol's traffic in both directions and the replies it causes, and nothing else. A port filter alone drops replies a detector or reader needs: add `icmp` (or `icmp6`) for UDP or IP-level traffic (port unreachable, fragmentation errors), and the data connections when the mission is about them (FTP active/passive). Write an expectation for the replies, so a filter that drops them fails.
 5. `expect.json`: written from the mission before the first run (`references/mission.md`).
 6. `mechanism.md`: the template's explanation of the attack, with references. Rewrite it when the attack, server or variant changes (`references/mission.md` → *Mechanism*).
+7. Template leftovers: remove comments, config directives, modes and payload files that serve the template's attack and not this mission (e.g. brute-force delay settings in a lab that now does a bounce scan).
 
 ## Adding a trace
 

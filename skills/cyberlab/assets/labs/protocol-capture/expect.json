@@ -3,7 +3,13 @@
   "traces": {
     "capture.pcap": [
       {"filter": "tcp.port == 6379 && tcp.len > 0", "min": 10, "endpoints": 2},
-      {"filter": "tcp.port == 6379 && tcp.payload contains \"-ERR\"", "min": 1}
+      {"filter": "tcp.dstport == 6379 && resp.array", "min": 10, "claim": "each command sent as a RESP array"},
+      {"filter": "tcp.srcport == 6379 && resp.string", "min": 1, "claim": "simple string reply"},
+      {"filter": "tcp.srcport == 6379 && resp.error", "min": 1, "claim": "error reply"},
+      {"filter": "tcp.srcport == 6379 && resp.integer", "min": 1, "claim": "integer reply"},
+      {"filter": "tcp.srcport == 6379 && resp.bulk_string.length >= 0", "min": 1, "claim": "bulk string reply"},
+      {"filter": "tcp.srcport == 6379 && resp.bulk_string.length == -1", "min": 1, "claim": "null reply"},
+      {"filter": "tcp.srcport == 6379 && resp.array", "min": 1, "claim": "array reply"}
     ]
   }
 }
