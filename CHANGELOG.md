@@ -42,6 +42,10 @@
 
 - `craft` and `run` fail when the provenance step fails. Before, a re-craft kept the previous trace's `provenance.json` (with the old sha256, command and inputs) next to the new trace and exited 0. They now check the step's exit status and remove the stale provenance and document.
 
+### Documentation
+
+- Add the cyberLab logo: a sealed lab with a captured trace that ends in a check mark, in the MMT amber palette. `assets/logo/` holds 7 SVG variants (mark, full, wordmark, app icon, favicon, white, black), PNG exports in `assets/logo/png/`, and `brand-showcase.html`. The README header shows the logo, with the white variant in GitHub dark mode.
+
 ## v1.2.0 — 2026-11-18
 
 First release of cyberlab, an agent skill that builds the smallest isolated Docker lab for one mission and returns pcap traces verified to show what was asked. The skill's internal versions 1.0.0 and 1.1.0 were never tagged; their changes are included below.
