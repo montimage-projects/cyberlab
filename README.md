@@ -36,12 +36,21 @@ The agent follows these steps in [`skills/cyberlab/SKILL.md`](skills/cyberlab/SK
 
 The host needs only Docker with Compose v2. Validated on macOS (arm64, Docker Desktop) and Ubuntu 24.04 (arm64, Docker Engine); Windows has not been run.
 
-Copy `skills/cyberlab/` into your agent's skills directory (for Claude Code: `~/.claude/skills/cyberlab/`):
+Install the skill with one of these:
 
 ```bash
+# npx (Vercel skills CLI)
+npx skills add https://github.com/montimage-projects/cyberlab --skill cyberlab
+
+# asm (agent-skill-manager: npm install -g agent-skill-manager)
+asm install github:montimage-projects/cyberlab --path skills/cyberlab -p claude -s global
+
+# or by hand: copy skills/cyberlab/ into your agent's skills directory
 git clone https://github.com/montimage-projects/cyberlab.git
 cp -R cyberlab/skills/cyberlab ~/.claude/skills/
 ```
+
+Both installers ask which agent and scope to use when you leave those out. The commands below assume a global Claude Code install (`~/.claude/skills/cyberlab/`); adjust the path for another agent or a project install.
 
 Then check the host and build the tools image:
 
