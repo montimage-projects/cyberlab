@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- cyberLab favicon: 2 layers (sealed chamber + trace), same proportions as the mark -->
+  <path d="M4,0.75 H12 Q15.25,0.75 15.25,4 V12 Q15.25,15.25 12,15.25 H4 Q0.75,15.25 0.75,12 V4 Q0.75,0.75 4,0.75 Z"
+        fill="#1A1A1A" stroke="#8B7D6B" stroke-width="1.1"/>
+  <path d="M3.4,8.4 H5 L6.4,5.3 L8.4,11 L9.8,8.3 L10.8,9.3 L12.8,6"
+        fill="none" stroke="#E9AB34" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

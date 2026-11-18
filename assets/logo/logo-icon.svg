@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="cyberLab icon">
+  <!-- cyberLab app icon: canonical mark scaled x6 and centered -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="#111111"/>
+  <rect x="1" y="1" width="510" height="510" rx="111" fill="none" stroke="#262626" stroke-width="2"/>
+  <g transform="translate(64,64) scale(6)">
+    <path d="M14,6 H50 Q58,6 58,14 V50 Q58,58 50,58 H14 Q6,58 6,50 V14 Q6,6 14,6 Z" fill="none" stroke="#8B7D6B" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M17,11 H47 Q53,11 53,17 V47 Q53,53 47,53 H17 Q11,53 11,47 V17 Q11,11 17,11 Z" fill="#1A1A1A"/>
+    <path d="M16,33 H22 L26,24 L31,42 L35,33 L39,37 L48,26" fill="none" stroke="#E9AB34" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

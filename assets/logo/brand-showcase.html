@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cyberLab Brand Identity</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --charcoal: #1A1A1A;
+    --ink: #0A0A0A;
+    --surface: #111111;
+    --border: #262626;
+    --amber: #E9AB34;
+    --amber-deep: #C48E1E;
+    --taupe: #8B7D6B;
+    --muted: #A1A1A1;
+    --paper: #FAFAFA;
+    --line: #E7E3DC;
+    --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--paper); color: var(--charcoal); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 88px 0; }
+  .label { font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--amber-deep); margin-bottom: 14px; }
+  h2 { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 36px; }
+
+  /* Hero */
+  .hero { background: var(--ink); color: var(--paper); text-align: center; padding: 120px 0 104px; border-bottom: 1px solid var(--border); }
+  .hero svg { width: 148px; height: 148px; filter: drop-shadow(0 0 28px rgba(233,171,52,.22)); }
+  .hero .label { color: var(--amber); margin: 34px 0 10px; }
+  .hero h1 { font-size: clamp(48px, 9vw, 76px); font-weight: 700; letter-spacing: -.035em; line-height: 1.05; }
+  .hero h1 span { color: var(--amber); }
+  .hero p { color: var(--muted); font-size: 18px; max-width: 560px; margin: 20px auto 0; }
+
+  /* Concept */
+  .concept { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+  .annot { background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 28px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.05); }
+  .annot svg { width: 100%; height: auto; display: block; }
+  .prose h3 { font-size: 16px; font-weight: 600; margin: 22px 0 6px; }
+  .prose h3:first-child { margin-top: 0; }
+  .prose p { color: #4A4A4A; font-size: 15.5px; }
+
+  /* Variants */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .card { position: relative; border-radius: 18px; min-height: 230px; display: flex; align-items: center; justify-content: center; padding: 56px 32px 48px; transition: transform .2s ease; }
+  .card:hover { transform: translateY(-3px); }
+  .card.light { background: #fff; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 10px 28px rgba(0,0,0,.05); }
+  .card.dark { background: var(--ink); border: 1px solid var(--border); }
+  .card.wide { grid-column: 1 / -1; }
+  .card .tag { position: absolute; top: 18px; left: 22px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--taupe); }
+  .card .file { position: absolute; bottom: 16px; right: 22px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .card .cap { position: absolute; bottom: 16px; left: 22px; font-size: 12px; color: var(--muted); }
+  .card img { display: block; max-width: 100%; }
+
+  /* Palette */
+  .palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+  .chip { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: #fff; }
+  .sw { height: 112px; display: flex; align-items: flex-end; padding: 12px 14px; font-family: var(--mono); font-size: 13px; font-weight: 500; }
+  .chip .meta { padding: 14px; }
+  .chip b { display: block; font-size: 14px; font-weight: 600; }
+  .chip small { color: #6B6B6B; font-size: 12.5px; line-height: 1.45; display: block; margin-top: 2px; }
+
+  /* Typography */
+  .type { background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 44px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+  .specimen { font-size: 96px; font-weight: 700; letter-spacing: -.04em; line-height: 1; }
+  .specimen span { color: var(--amber-deep); }
+  .weights div { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--line); padding: 12px 0; }
+  .weights div:last-child { border: 0; }
+  .weights em { font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  /* Dev */
+  .dev { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  pre { background: var(--ink); color: #D6D6D6; border: 1px solid var(--border); border-radius: 16px; padding: 26px; font-family: var(--mono); font-size: 13px; line-height: 1.75; overflow-x: auto; }
+  .k { color: #E9AB34; } .s { color: #B9C98A; } .c { color: #6E6E6E; } .p { color: #8B7D6B; }
+
+  footer { background: var(--ink); color: var(--muted); padding: 40px 0; font-size: 14px; border-top: 1px solid var(--border); }
+  footer .wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+  footer img { height: 32px; display: block; }
+
+  @media (max-width: 820px) {
+    section { padding: 64px 0; }
+    .concept, .grid, .type, .dev { grid-template-columns: 1fr; }
+    .palette { grid-template-columns: 1fr 1fr; }
+    .specimen { font-size: 64px; }
+    .type { padding: 28px; }
+  }
+  @media (max-width: 420px) { .wrap { padding: 0 16px; } .palette { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <svg viewBox="0 0 64 64" aria-label="cyberLab mark">
+      <path d="M14,6 H50 Q58,6 58,14 V50 Q58,58 50,58 H14 Q6,58 6,50 V14 Q6,6 14,6 Z" fill="none" stroke="#8B7D6B" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M17,11 H47 Q53,11 53,17 V47 Q53,53 47,53 H17 Q11,53 11,47 V17 Q11,11 17,11 Z" fill="#1A1A1A"/>
+      <path d="M16,33 H22 L26,24 L31,42 L35,33 L39,37 L48,26" fill="none" stroke="#E9AB34" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="label">Brand Identity</div>
+    <h1>cyber<span>Lab</span></h1>
+    <p>A sealed lab and a captured trace that ends in a check mark: every pcap is generated in isolation and verified before it leaves.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="label">Design Concept</div>
+    <h2>Sealed lab, verified trace</h2>
+    <div class="concept">
+      <div class="annot">
+        <svg viewBox="0 0 400 300" font-family="Inter, sans-serif" font-size="12">
+          <g transform="translate(118,68) scale(2.6)">
+            <path d="M14,6 H50 Q58,6 58,14 V50 Q58,58 50,58 H14 Q6,58 6,50 V14 Q6,6 14,6 Z" fill="none" stroke="#8B7D6B" stroke-width="2.5" stroke-linejoin="round"/>
+            <path d="M17,11 H47 Q53,11 53,17 V47 Q53,53 47,53 H17 Q11,53 11,47 V17 Q11,11 17,11 Z" fill="#1A1A1A"/>
+            <path d="M16,33 H22 L26,24 L31,42 L35,33 L39,37 L48,26" fill="none" stroke="#E9AB34" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+          <g stroke="#B5ADA1" stroke-width="1" fill="none">
+            <path d="M136,96 L100,64 H20"/>
+            <path d="M163,154 L110,250 H20"/>
+            <path d="M243,136 L300,64 H384"/>
+            <path d="M199,177 L290,250 H384"/>
+          </g>
+          <g fill="#E9AB34"><circle cx="136" cy="96" r="3.5"/><circle cx="163" cy="154" r="3.5"/><circle cx="243" cy="136" r="3.5"/><circle cx="199" cy="177" r="3.5"/></g>
+          <g fill="#1A1A1A" font-weight="600">
+            <text x="20" y="56">Outer seal</text><text x="20" y="242">Capture point</text>
+            <text x="384" y="56" text-anchor="end">Verified (check)</text><text x="384" y="242" text-anchor="end">Attack burst</text>
+          </g>
+          <g fill="#8A8A8A" font-size="11">
+            <text x="20" y="80">no route out</text><text x="20" y="266">flat baseline</text>
+            <text x="384" y="80" text-anchor="end">expect.json passes</text><text x="384" y="266" text-anchor="end">traffic in the pcap</text>
+          </g>
+        </svg>
+      </div>
+      <div class="prose">
+        <h3>Symbol</h3>
+        <p>The outer rounded square is the lab boundary: an internal Docker network with no published ports and no route out. Inside it, the dark chamber holds one captured trace. The line starts flat, spikes where the attack or protocol traffic happens, and finishes as a check mark, because a trace only leaves the lab after tshark has verified it.</p>
+        <h3>Color</h3>
+        <p>cyberLab uses the MMT family palette shared with mmt-security and mmt-dpi. Golden Amber marks the trace, the one thing the skill hands back. Charcoal and taupe stay neutral so the amber is the first thing you see.</p>
+        <h3>Typography</h3>
+        <p>Inter Bold with slightly tight tracking. "cyber" is set in charcoal and "Lab" in amber, the same camelCase split the mmtDPI wordmark uses.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="label">Logo Variants</div>
+    <h2>Seven files, one geometry</h2>
+    <div class="grid">
+      <div class="card light wide"><span class="tag">Full logo</span><img src="logo-full.svg" alt="cyberLab full logo" width="420"><span class="file">logo-full.svg</span></div>
+      <div class="card dark wide"><span class="tag">White</span><img src="logo-white.svg" alt="cyberLab white logo" width="420"><span class="file">logo-white.svg</span></div>
+      <div class="card dark"><span class="tag">Mark</span><img src="logo-mark.svg" alt="cyberLab mark" width="128"><span class="file">logo-mark.svg</span></div>
+      <div class="card light"><span class="tag">App icon</span><img src="logo-icon.svg" alt="cyberLab app icon" width="144"><span class="file">logo-icon.svg</span></div>
+      <div class="card light"><span class="tag">Wordmark</span><img src="logo-wordmark.svg" alt="cyberLab wordmark" width="270"><span class="file">logo-wordmark.svg</span></div>
+      <div class="card dark"><span class="tag">Favicon</span><img src="favicon.svg" alt="cyberLab favicon" width="64"><span class="cap">16×16px, shown at 64px</span><span class="file">favicon.svg</span></div>
+      <div class="card light wide"><span class="tag">Black</span><img src="logo-black.svg" alt="cyberLab black logo" width="420"><span class="file">logo-black.svg</span></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="label">Color Palette</div>
+    <h2>MMT family colors</h2>
+    <div class="palette">
+      <div class="chip"><div class="sw" style="background:#E9AB34;color:#1A1A1A">#E9AB34</div><div class="meta"><b>Golden Amber</b><small>Accent: the trace, highlights and lines. Use on dark backgrounds.</small></div></div>
+      <div class="chip"><div class="sw" style="background:#C48E1E;color:#fff">#C48E1E</div><div class="meta"><b>Deep Amber</b><small>Accent on light backgrounds (the "Lab" in the wordmark).</small></div></div>
+      <div class="chip"><div class="sw" style="background:#1A1A1A;color:#FAFAFA">#1A1A1A</div><div class="meta"><b>Charcoal</b><small>Primary: the chamber and the wordmark text.</small></div></div>
+      <div class="chip"><div class="sw" style="background:#8B7D6B;color:#fff">#8B7D6B</div><div class="meta"><b>Taupe</b><small>Outer seal, secondary lines and labels.</small></div></div>
+      <div class="chip"><div class="sw" style="background:#0A0A0A;color:#A1A1A1">#0A0A0A</div><div class="meta"><b>Ink</b><small>Dark background.</small></div></div>
+      <div class="chip"><div class="sw" style="background:#111111;color:#A1A1A1">#111111</div><div class="meta"><b>Surface</b><small>Cards and the app-icon tile on dark.</small></div></div>
+      <div class="chip"><div class="sw" style="background:#262626;color:#A1A1A1">#262626</div><div class="meta"><b>Border</b><small>Hairlines on dark surfaces.</small></div></div>
+      <div class="chip"><div class="sw" style="background:#FAFAFA;color:#1A1A1A;box-shadow:inset 0 -1px 0 #E7E3DC">#FAFAFA</div><div class="meta"><b>Paper</b><small>Light background.</small></div></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="label">Typography</div>
+    <h2>Inter</h2>
+    <div class="type">
+      <div><div class="specimen">cyber<span>Lab</span></div><p style="margin-top:20px;color:#4A4A4A">Isolated labs. Verified traces. Inter Bold for the wordmark and headings, Regular for body text, JetBrains Mono for code and file names.</p></div>
+      <div class="weights">
+        <div><span style="font-weight:700;font-size:24px">Verified traces</span><em>Bold 700</em></div>
+        <div><span style="font-weight:600;font-size:20px">One lab per mission</span><em>Semibold 600</em></div>
+        <div><span style="font-weight:400;font-size:17px">Capture, teardown, verify.</span><em>Regular 400</em></div>
+        <div><span style="font-family:var(--mono);font-size:15px">out/brute.pcap</span><em>JetBrains Mono</em></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="label">Developer Reference</div>
+    <h2>Use it in code</h2>
+    <div class="dev">
+<pre><span class="c">// tailwind.config.js</span>
+<span class="k">theme</span>: { <span class="k">extend</span>: { <span class="k">colors</span>: {
+  <span class="k">brand</span>: {
+    <span class="p">primary</span>:    <span class="s">'#1A1A1A'</span>,
+    <span class="p">accent</span>:     <span class="s">'#E9AB34'</span>,
+    <span class="p">accentDeep</span>: <span class="s">'#C48E1E'</span>,
+    <span class="p">taupe</span>:      <span class="s">'#8B7D6B'</span>,
+    <span class="p">surface</span>:    <span class="s">'#111111'</span>,
+    <span class="p">border</span>:     <span class="s">'#262626'</span>,
+    <span class="p">muted</span>:      <span class="s">'#A1A1A1'</span>,
+    <span class="p">paper</span>:      <span class="s">'#FAFAFA'</span>,
+    <span class="p">ink</span>:        <span class="s">'#0A0A0A'</span>,
+  },
+} } }</pre>
+<pre><span class="k">assets/logo/</span>
+├── <span class="s">logo-mark.svg</span>      <span class="c"># 64×64 canonical mark</span>
+├── <span class="s">logo-full.svg</span>      <span class="c"># 320×72 mark + wordmark</span>
+├── <span class="s">logo-wordmark.svg</span>  <span class="c"># 180×40 text only</span>
+├── <span class="s">logo-icon.svg</span>      <span class="c"># 512×512 app icon</span>
+├── <span class="s">favicon.svg</span>        <span class="c"># 16×16, 2 layers</span>
+├── <span class="s">logo-white.svg</span>     <span class="c"># one color, dark bg</span>
+├── <span class="s">logo-black.svg</span>     <span class="c"># one color, light bg</span>
+└── <span class="s">brand-showcase.html</span>
+
+<span class="c">&lt;!-- README header --&gt;</span>
+<span class="p">&lt;img</span> src=<span class="s">"assets/logo/logo-full.svg"</span>
+     alt=<span class="s">"cyberLab"</span> width=<span class="s">"320"</span><span class="p">&gt;</span></pre>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <img src="logo-white.svg" alt="cyberLab">
+    <span>cyberLab · Brand Identity · Montimage</span>
+  </div>
+</footer>
+
+</body>
+</html>
