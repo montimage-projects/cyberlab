@@ -26,7 +26,9 @@ tshark display filter: PASS when min <= count <= max (min defaults to 1, or 0 wh
 matching frames instead of frames: use it when one packet carries several messages (HTTP/2,
 SCTP chunks, pipelined requests), e.g. {"filter": "http2.type == 3", "count_field": "http2.type",
 "count_value": "3", "min": 90}.
-Rate, spread and spacing (what a time-window rule keys on; min/max then bound the measure):
+Rate, spread and spacing (what a time-window rule keys on). With window or distinct set, min and
+max bound that measure, not the number of matching frames; the two cannot be combined in one
+expectation (write two):
   "window": T      the most matches in any T-second window, e.g. {"filter": "dicom.pdu.type == 1",
                    "window": 5, "min": 21} (attack above a ">20 in 5 s" threshold) or "max": 20 (benign
                    below it); counts count_field occurrences when count_field is set.
@@ -35,6 +37,8 @@ Rate, spread and spacing (what a time-window rule keys on; min/max then bound th
   "gap_min": S / "gap_max": S   every interval between consecutive matches is >= / <= S seconds
                    (needs 2 matches), e.g. one attempt every 20 s: "gap_min": 18, "gap_max": 22.
 "claim": text  the sentence of the brief this expectation proves (shown in the result).
+Fields given to count_field and distinct must be dissected fields: tshark cannot print a byte slice
+(tcp.payload[0:2]); check such values with one filter per value instead.
 Any other key fails the check (a misspelt "windows" would otherwise be ignored).
 Relations between fields are plain tshark filters: "ftp.active.cip != ip.src" (a PORT naming another
 host), "ip.src != 10.0.0.2" (a spoofed source).
@@ -81,23 +85,26 @@ def trace_info(path):
 def matches(path, flt, field=None, value=None, distinct=None):
     """Frames matching flt: one (time, units, distinct values, source) row each. units is 1, or with
     field the occurrences of field[=value] in the frame."""
-    fields = ["frame.time_relative", field or "frame.number", distinct or "frame.number", "ip.src", "ipv6.src", "eth.src"]
+    # tshark prints a field named twice only once, so ask for each name once and look columns up by name
+    wanted = ["frame.time_relative", field, distinct, "ip.src", "ipv6.src", "eth.src"]
+    names = list(dict.fromkeys(f for f in wanted if f))
     rc, out, err = run(["tshark", "-n", "-r", path, "-Y", flt, "-T", "fields", "-E", "separator=|"]
-                       + [x for f in fields for x in ("-e", f)])
+                       + [x for f in names for x in ("-e", f)])
     if rc != 0:
         return None, err.strip().splitlines()[0] if err.strip() else f"tshark exit {rc}"
+    col = {f: i for i, f in enumerate(names)}
     rows = []
     for r in out.splitlines():
         if not r.strip():
             continue
-        p = (r.split("|") + [""] * 6)[:6]
+        p = (r.split("|") + [""] * len(names))[:len(names)]
         units = 1
         if field:
-            vals = [v for v in p[1].split(",") if v != ""]
+            vals = [v for v in p[col[field]].split(",") if v != ""]
             units = sum(1 for v in vals if value is None or v == str(value))
-        dvals = {v for v in p[2].split(",") if v != ""} if distinct else set()
-        src = next((x for x in p[3:] if x), "")
-        rows.append((float(p[0] or 0), units, dvals, src))
+        dvals = {v for v in p[col[distinct]].split(",") if v != ""} if distinct else set()
+        src = next((p[col[f]] for f in ("ip.src", "ipv6.src", "eth.src") if p[col[f]]), "")
+        rows.append((float(p[col["frame.time_relative"]] or 0), units, dvals, src))
     return rows, None
 
 
@@ -167,6 +174,9 @@ def main():
             if unknown_keys:
                 res(False, f"'{flt}': unknown key(s) {', '.join(unknown_keys)} (allowed: {', '.join(sorted(KEYS))})")
                 continue
+            if "window" in e and "distinct" in e:
+                res(False, f"'{flt}': window and distinct measure different things; write two expectations")
+                continue
             lo, hi, ep = int(e.get("min", 0 if "max" in e else 1)), e.get("max"), e.get("endpoints")
             cf, cv, win, dist = e.get("count_field"), e.get("count_value"), e.get("window"), e.get("distinct")
             gmin, gmax = e.get("gap_min"), e.get("gap_max")
@@ -210,7 +220,9 @@ def main():
         merged = {}
     merged.update(report)  # keep earlier traces' results: one file holds the whole mission's evidence
     try:
-        json.dump(merged, open(out_path, "w"), indent=1)
+        with open(out_path + ".tmp", "w") as f:
+            json.dump(merged, f, indent=1)
+        os.replace(out_path + ".tmp", out_path)
     except OSError:
         pass
     print(f"RESULT {'PASS' if failed == 0 else 'FAIL'} ({failed} failed check(s))")

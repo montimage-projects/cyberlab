@@ -68,3 +68,5 @@ It warns (does not fail) on an image without a pinned tag. While running, `run` 
 | Window/rate expectations fail on crafted traces | crafted timing is compressed | use a lab with the real server |
 | `the capture dropped N packet(s)` | a burst outran tcpdump (seen when it wrote through a bind mount on Docker Desktop) | write to `/cap` inside the capture container as the templates do, raise `-B`, or pace the generator; never keep an incomplete trace |
 | Lab left running after an interruption | the run was killed | `cyberlab down <lab>`, or `cyberlab nuke` |
+| An IGMP report appears in one capture and not the next | the Docker bridge's own start-up IGMP report (source 0.0.0.0) races tcpdump, and other containers' IGMP is not forwarded to the victim | never claim IGMP in a lab capture; allow it (`max`, no `min`) or exclude `ip.src == 0.0.0.0` from "nothing else" checks |
+| A derived trace no longer matches after its source was recaptured | a `--script` craft reads another trace in `out/` | regenerate the source first, then the derived traces; `doc` warns when a source trace changed |

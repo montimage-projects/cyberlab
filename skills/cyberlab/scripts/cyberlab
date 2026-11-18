@@ -298,7 +298,7 @@ cmd_craft() {
     [ -f "$lab/$script" ] || die "craft: script $lab/$script not found (it must sit inside the lab directory)."
   fi
   [ "${1:-}" = "--" ] && shift
-  mkdir -p "$lab/out" && rm -f "$lab/out/$trace" "$lab/out/${trace%.pcap}.provenance.json" "$lab/out/${trace%.pcap}.md"
+  mkdir -p "$lab/out" && rm -f "$lab/out/$trace"   # provenance and document are rewritten in place (atomically)
   local gen cmdline
   if [ -n "$script" ]; then
     gen="python3 $script $*"
@@ -322,6 +322,8 @@ cmd_verify() {
   [ $# -ge 1 ] || die "usage: cyberlab verify <lab> [trace.pcap]..."
   local lab="$1"; shift
   [ -f "$lab/expect.json" ] || die "no $lab/expect.json (references/mission.md says how to write it)."
+  local t ts=(); for t in "$@"; do [ "$t" = "--trace" ] || ts+=("$t"); done   # accept "--trace X" too
+  set -- ${ts[@]+"${ts[@]}"}
   need_docker; need_tools
   lab="$(abspath "$lab")"
   local vrc=0; verify_traces "$lab" "$@" || vrc=$?

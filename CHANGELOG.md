@@ -21,6 +21,13 @@
   - Adapting a template removes the template's leftovers.
   - Crafted traces that imitate a documented attack take their field values from the source.
   - The hand-off says verdicts are expected, not confirmed by running the detector.
+- Fixes found while regenerating 108 traces under the new checks:
+  - `distinct: "ip.src"` (or any field also used for the source column) counted 0, because tshark prints a repeated field once.
+  - `window` and `distinct` in one expectation silently ignored `distinct`; the combination now fails with a message.
+  - `craft` could fail with FileNotFoundError when writing the provenance or document right after the host deleted it (Docker Desktop bind mount). Files are now written atomically and not deleted on the host first.
+  - `cyberlab verify <lab> --trace X` broke the document step; `--trace` is now accepted.
+  - `doc` warns when a trace made by a `--script` craft may derive from another trace that has changed since.
+  - Lab authoring documents the Docker bridge IGMP race; the expectations guide documents presence-flag fields and always-true field comparisons.
 - `cyberlab doc` (and `run`, `craft`, `verify`) prints a `WARN doc` line for each gap in a trace's document: no `Traces:` line, no `mechanism.md` or section, no references, not verified or failing, lab inputs not recorded or changed since generation. Step 6 requires none for the request's traces.
 - Record what reproduction needs in `out/<trace>.provenance.json`:
   - the cyberlab version, the exact command, and `MODE`/`PCAP`/`CYBERLAB_TIMEOUT`;
