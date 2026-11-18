@@ -44,6 +44,7 @@
 
 ### Documentation
 
+- Put onboarding first in the README: install, one-time setup, the common agent request, what comes back and how to replay it, then the CLI-only path. The problem, diagrams, features, templates and safety come after; the duplicate "Get started" section is gone.
 - Add the cyberLab logo: a sealed lab with a captured trace that ends in a check mark, in the MMT amber palette. `assets/logo/` holds 9 SVG variants (mark, full, full for dark backgrounds, badge, wordmark, app icon, favicon, white, black), PNG exports in `assets/logo/png/`, and `brand-showcase.html`. The README header shows the badge (the logo on its own dark tile, with outlined text), which reads the same whatever the GitHub or system theme.
 
 ## v1.2.0 — 2026-11-18
