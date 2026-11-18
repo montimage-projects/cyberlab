@@ -117,7 +117,7 @@ A lab directory holds `mission.md` (with a `## Log` of each request), `expect.js
 |---|---|---|
 | `CYBERLAB_TOOLS` | `cyberlab/tools:local` | the CLI: tools image for checks, capture and crafting |
 | `CYBERLAB_TIMEOUT` | `300` | the CLI: seconds `run` waits for the generator before tearing the lab down |
-| `CYBERLAB_HOME` | `$HOME/.cache/cyberlab` | the agent (SKILL.md Step 1): parent of new lab directories when the caller names none |
+| `CYBERLAB_HOME` | `$HOME/.cache/cyberlab` | the agent (SKILL.md Step 1): parent of new lab directories when the caller names none; `cyberlab labs`: directory it lists when given none |
 
 ## Templates (all run end to end)
 
