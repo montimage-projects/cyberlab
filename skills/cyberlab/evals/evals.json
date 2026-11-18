@@ -12,7 +12,10 @@
         "The benign expectations assert FTP is present (min >= 1) and 530 replies are absent (max 0)",
         "`cyberlab run <lab> attack` and `cyberlab run <lab> benign` both ended with RESULT PASS",
         "The hand-off report starts with `Result: COMPLETE` and lists both traces with frames, sha256 and origin `lab capture`",
-        "`cyberlab status <lab>` printed `no cyberlab lab resources` at the end"
+        "`cyberlab status <lab>` printed `no cyberlab lab resources` at the end",
+        "out/attack.md and out/benign.md exist, each with a 'How to reproduce' section naming the `cyberlab run` command for its mode",
+        "The lab's mechanism.md explains FTP password guessing, has an attack.pcap and a benign.pcap section, and lists references (e.g. RFC 959, MITRE ATT&CK T1110.001), and out/attack.md shows it under Mechanism",
+        "Each `## <trace>.pcap` section of mechanism.md states the expected verdict of the brute-force rule (fires on attack.pcap, stays silent on benign.pcap), and the final `cyberlab doc` printed no `WARN doc` line"
       ]
     },
     {
@@ -38,7 +41,8 @@
         "The brief's Generator line says crafted and gives the no-implementation reason",
         "The run used `cyberlab craft` (no docker compose lab was started)",
         "expect.json checks both directions on udp.port == 5684",
-        "The report labels the trace `crafted (synthetic)` and its status is not stated as a lab capture"
+        "The report labels the trace `crafted (synthetic)` and its status is not stated as a lab capture",
+        "out/capture.md says a rerun of the same craft command gives the same sha256"
       ]
     },
     {
@@ -64,7 +68,8 @@
         "mission.md keeps its goal and Scope, lists a new trace (e.g. attack-slow.pcap) and has a dated `## Log` line for this request",
         "expect.json keeps the attack.pcap and benign.pcap entries unchanged and adds one for the new trace",
         "In the second request `cyberlab run` was invoked only for the new mode; attack.pcap and benign.pcap keep the sha256 of the first hand-off",
-        "The final `cyberlab verify ./ftp-bf` passes for all three traces and the report's `Lab:` line names the two earlier traces"
+        "The final `cyberlab verify ./ftp-bf` passes for all three traces and the report's `Lab:` line names the two earlier traces",
+        "mechanism.md gains a `## attack-slow.pcap` section describing the slow pacing as captured (about one attempt every 20 s); the attack.pcap and benign.pcap sections are unchanged"
       ]
     },
     {

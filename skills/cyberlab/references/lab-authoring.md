@@ -16,7 +16,7 @@ Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting]
 | `capture` | `image: ${CYBERLAB_TOOLS:-cyberlab/tools:local}`, `network_mode: "service:victim"`, `tcpdump -Z root -i eth0 -B 32768 --immediate-mode -U -w /cap/${PCAP}.pcap <bpf>`, healthcheck `test -s /cap/${PCAP}.pcap` (the trace stays inside the container until `run` copies it to `out/`) |
 | `generator` | the client/attacker; reads `${MODE}`, `depends_on` capture `service_healthy`, sleeps ~2 s, does its work, **exits 0** on success and non-zero on failure |
 
-`run` checks the policy, starts the lab, checks the running containers and network, waits for `generator` (`CYBERLAB_TIMEOUT`, default 300 s), waits 2 s for libpcap to flush, stops `capture` and fails if tcpdump reports any packet dropped by the kernel, tears everything down, checks nothing is left, writes `out/<mode>.pcap`, `out/<mode>.provenance.json` and `out/<mode>.generator.log`, then verifies the trace against `expect.json`.
+`run` checks the policy, starts the lab, checks the running containers and network, waits for `generator` (`CYBERLAB_TIMEOUT`, default 300 s), waits 2 s for libpcap to flush, stops `capture` and fails if tcpdump reports any packet dropped by the kernel, tears everything down, checks nothing is left, writes `out/<mode>.pcap`, `out/<mode>.provenance.json` (command, `MODE`/`PCAP`, resolved services, image IDs and registry digests, Dockerfile base images, sha256 of every lab file, tool and Docker versions) and `out/<mode>.generator.log`, verifies the trace against `expect.json`, then writes `out/<mode>.md`, the trace's reproduction document.
 
 ## Templates
 
@@ -35,13 +35,14 @@ Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting]
 3. Modes: one `MODE` value per trace (the trace name without `.pcap`); the same server for every trace. An unknown mode must make the generator exit non-zero, never fall back to another mode's traffic.
 4. Capture filter: the protocol's port only, so the trace stays small and on-mission.
 5. `expect.json`: written from the mission before the first run (`references/mission.md`).
+6. `mechanism.md`: the template's explanation of the attack, with references. Rewrite it when the attack, server or variant changes (`references/mission.md` → *Mechanism*).
 
 ## Adding a trace
 
 In a lab that already holds traces (a continued mission):
 
 1. Pick a new trace name, e.g. `attack-slow.pcap`; its mode is `attack-slow`.
-2. Add the mode to the generator: a new branch in the client (`ftp-bruteforce`, `port-scan`, `h2c-rapid-reset`, `protocol-capture/gen.sh`), or a new `payloads/attack-slow.jsonl` (`http-payloads`). Leave the existing branches as they are, so earlier traces can still be regenerated identically.
+2. Add the mode to the generator (each trace's document records the sha256 of every lab file at generation, and marks a file changed later): a new branch in the client (`ftp-bruteforce`, `port-scan`, `h2c-rapid-reset`, `protocol-capture/gen.sh`), or a new `payloads/attack-slow.jsonl` (`http-payloads`). Leave the existing branches as they are, so earlier traces can still be regenerated identically.
 3. Change the victim, its config or the capture filter only if every existing trace is still served by the change; otherwise the new need is a different task (a new lab). Say in the hand-off which change was made after which trace.
 4. Add the trace's entry to `expect.json`, then `cyberlab check <lab>` (it checks every mode) and `cyberlab run <lab> attack-slow`.
 

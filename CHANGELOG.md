@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- Write a reproduction document for every trace: `out/<trace>.md` says what the trace contains, how it was generated, what was checked and how someone else reproduces it.
+  - `run`, `craft` and `verify` write it; the new `cyberlab doc <lab> [trace.pcap]...` writes it for traces made before documents existed. Their documents mark the lab file hashes as taken at that time, not at generation.
+  - The document is built from the trace's `Traces:` line in `mission.md`, its `expect.json` entry, `out/verify.json`, its provenance, and tshark summaries: protocol hierarchy, conversations and the first 40 packets.
+  - It states what reproducing means for the trace. A trace crafted with `craft_pcap.py` gives the same bytes and sha256 (checked by crafting a trace twice). A lab capture gives an equivalent trace that passes the same expectations, never the same file. A `--script` trace gives the same file only if the script is deterministic.
+- Explain the attack in every trace document: a lab's `mechanism.md` describes how the attack (or, for a protocol capture, the protocol) works, what each trace shows of it, and the references. The document shows it under **Mechanism**.
+  - Every template ships one with checked links: RFC 959, MITRE ATT&CK T1110.001 and CWE-307 (FTP brute force); CVE-2023-44487, RFC 9113 and Cloudflare's write-up (HTTP/2 Rapid Reset); CVE-2021-44228, CVE-2014-6271, OWASP and T1190 (HTTP payloads); the Nmap guide, T1046 and RFC 9293 (port scan); the RESP spec (Redis capture).
+  - The skill writes or adapts it in Step 4. It cites only sources whose content it has checked (or marks a link `(link not checked)`) and never invents a URL, CVE or technique ID.
+  - Each trace section names the rule it targets and the expected verdict (fires / stays silent).
+  - In Step 6 the skill checks the text against the trace actually captured. A difference that breaks the mission sends the trace back to Step 5, not into the text.
+- `cyberlab doc` (and `run`, `craft`, `verify`) prints a `WARN doc` line for each gap in a trace's document: no `Traces:` line, no `mechanism.md` or section, no references, not verified or failing, lab inputs not recorded or changed since generation. Step 6 requires none for the request's traces.
+- Record what reproduction needs in `out/<trace>.provenance.json`:
+  - the cyberlab version, the exact command, and `MODE`/`PCAP`/`CYBERLAB_TIMEOUT`;
+  - the sha256 of every lab file at generation;
+  - the resolved lab services, and image IDs with registry digests and platform;
+  - the Dockerfile base images, the tools image and its tshark/tcpdump/Python versions, and the host's Docker version and platform;
+  - for `--script` crafts, the sha256 of the other traces in `out/` that the script may have read.
+
+  Existing fields are unchanged. The document flags any lab file changed after its trace was generated.
+
 ## v1.2.0 — 2026-11-18
 
 First release of cyberlab, an agent skill that builds the smallest isolated Docker lab for one mission and returns pcap traces verified to show what was asked. The skill's internal versions 1.0.0 and 1.1.0 were never tagged; their changes are included below.

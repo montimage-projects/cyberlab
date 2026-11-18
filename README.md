@@ -15,7 +15,8 @@ You (or a calling agent) say what the lab is for. The skill writes a one-goal mi
 - **Expectations first:** `expect.json` holds tshark filters with frame-count bounds per trace. `run` and `craft` refuse a trace that has no expectation, and a trace is done only when its expectations pass.
 - **Isolation checked three times:** an allowlist policy on the compose file before start, the running containers and networks, and the teardown (see [Safety](#safety)).
 - **Crafted traces when no implementation exists:** payloads behind real Ethernet/IP/TCP/UDP headers, written with no network and labelled synthetic.
-- **Provenance:** each trace gets an `out/<trace>.provenance.json` with origin, frames, sha256 and, for lab captures, the images used.
+- **Attack mechanism:** each lab has a `mechanism.md` with how the attack (or protocol) works, what each trace shows of it, and links to the CVE, RFC, MITRE ATT&CK or vendor write-up. Every template ships one.
+- **Provenance and reproduction:** each trace gets an `out/<trace>.provenance.json` (origin, frames, sha256, the exact command, images with registry digests, the sha256 of every lab file) and an `out/<trace>.md` that explains what the trace contains, how the attack works, how it was generated and how someone else reproduces it.
 - **Host needs only Docker:** every check runs in a small tools image (tcpdump, tshark, Python).
 
 ## How it works
@@ -96,7 +97,8 @@ The CLI underneath (`skills/cyberlab/scripts/cyberlab --help`):
 | `cyberlab run <lab> <mode>` | policy, up, runtime isolation check, generate, capture (fails on dropped packets), verified teardown, verify `out/<mode>.pcap` |
 | `cyberlab craft <lab> <trace> -- <args>` | synthetic trace with no network, then verify |
 | `cyberlab craft <lab> <trace> --script <file.py> [-- args]` | same, from your own generator script in the lab directory |
-| `cyberlab verify <lab> [trace.pcap]...` | check traces against `expect.json` |
+| `cyberlab verify <lab> [trace.pcap]...` | check traces against `expect.json` (and rewrite their documents) |
+| `cyberlab doc <lab> [trace.pcap]...` | (re)write `out/<trace>.md`, the reproduction document, e.g. for traces made before documents existed |
 | `cyberlab status [lab]` / `down <lab>` / `nuke` | list / stop one / remove every cyberlab lab (`status` is the dry run of `nuke`) |
 
 Exit codes: `0` ok, `1` usage or environment error, `2` a policy, lab or expectation check failed.
@@ -109,7 +111,17 @@ cyberlab craft <lab> capture.pcap -- --parent udp:dport=5684 --payload "40 01 00
 
 ### Output
 
-A lab directory holds `mission.md` (with a `## Log` of each request), `expect.json`, the lab files and `out/`: the traces, one `<trace>.provenance.json` each, the generator log and `verify.json`.
+A lab directory holds `mission.md` (with a `## Log` of each request), `mechanism.md`, `expect.json`, the lab files and `out/`: the traces, one `<trace>.provenance.json` and one `<trace>.md` each, the generator log and `verify.json`.
+
+`<trace>.md` is the trace's document, written from the brief, `mechanism.md`, the expectations, the verification result, the provenance and tshark summaries of the trace:
+
+- **What it contains:** the brief's description, the protocol hierarchy, the conversations and the first 40 packets.
+- **Mechanism:** how the attack or protocol works, what this trace shows of it, and the references, from `mechanism.md`.
+- **What was checked:** the trace's expectations and the last verification result.
+- **How it was generated:** the command, `MODE`/`PCAP`, the resolved lab services, image IDs, registry digests and Dockerfile base images, tool and Docker versions, and the sha256 of every lab file (with a flag on any file changed since).
+- **How to reproduce:** the steps, and what "the same" means. A trace crafted with `craft_pcap.py` reproduces byte for byte (same sha256). A lab capture reproduces as an equivalent trace that passes the same expectations but is never the same file: timestamps, TCP sequence numbers, client ports and container addresses change on every run.
+
+To reproduce a trace, share the lab directory with it: the document lists the files that directory must hold.
 
 ## Configuration
 
@@ -145,7 +157,8 @@ Escape tests from inside a lab (public IPs, DNS, `host.docker.internal`, every T
 │   │   ├── cyberlab            CLI
 │   │   ├── lab_policy.py       isolation policy for a resolved compose file
 │   │   ├── verify.py           expectations check (tshark filters, frame counts, endpoints)
-│   │   └── craft_pcap.py       synthetic traces: payloads behind real headers
+│   │   ├── craft_pcap.py       synthetic traces: payloads behind real headers
+│   │   └── trace_doc.py        per-trace provenance and reproduction document
 │   ├── references/             mission brief, lab authoring, crafted traces, safety
 │   ├── assets/labs/            templates: ftp-bruteforce, h2c-rapid-reset, http-payloads, port-scan, protocol-capture
 │   ├── assets/tools/           the tools image (tcpdump, tshark, Python)

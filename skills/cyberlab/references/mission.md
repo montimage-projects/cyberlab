@@ -2,7 +2,7 @@
 
 Read this in Steps 1–3. A **mission** is one task: one protocol or one attack, for one consumer. It has one lab directory and as many trace files as the task needs. Everything in the lab exists for that task; anything else is left out. Later requests on the same task add traces to the same lab.
 
-Contents: [The brief](#the-brief) · [One task per lab](#one-task-per-lab) · [Continue or start](#continue-or-start) · [Choose the generator](#choose-the-generator) · [Expectations](#expectations) · [Mission shapes](#mission-shapes) · [Examples](#examples)
+Contents: [The brief](#the-brief) · [One task per lab](#one-task-per-lab) · [Continue or start](#continue-or-start) · [Choose the generator](#choose-the-generator) · [Expectations](#expectations) · [Mechanism](#mechanism) · [Mission shapes](#mission-shapes) · [Examples](#examples)
 
 ## The brief
 
@@ -94,6 +94,36 @@ Write `<lab>/expect.json` **before** generating: `run` and `craft` refuse a trac
 - Write the filters from the mission, never from what a trace happened to contain.
 - Check that a dissector and its fields exist before using them: `docker run --rm --network none cyberlab/tools:local tshark -G protocols | grep -i <proto>` (or `-G fields`). Reading the field list touches no trace.
 - When the protocol has no tshark dissector, filter on the transport: `tcp.port == 2208 && tcp.len > 0`, or `tcp.payload contains "<marker>"`.
+
+## Mechanism
+
+Write `<lab>/mechanism.md` in Step 4, and correct it in Step 6 against what each trace really holds. Every trace document (`out/<trace>.md`) shows it under **Mechanism**, so a reader learns what the attack is without leaving the trace. Each template ships one to adapt. `cyberlab doc` prints a `WARN doc` line when the file, a trace's section or the references are missing.
+
+```markdown
+# Mechanism: <attack or protocol name, with its CVE if it has one>
+
+<How it works: what the attacker sends, which protocol rule or weakness it abuses, and what that leads to.
+What a detector keys on: the messages, fields, counts or timing that set it apart from normal traffic; for a rule the caller named, what that rule matches (read its source when you have it) and its thresholds.
+How this lab produces it: server, client, any change from the real-world attack (e.g. cleartext instead of TLS).>
+
+## <trace>.pcap
+<what this trace holds: the variant, the counts, the pacing; the rule(s) it targets and the expected verdict (fires / stays silent); for a benign trace, what normal use it shows and why it must not trigger the rule; whether it is a real capture or synthetic>
+
+## References
+- [<title>](<url>) — <what this source supports>
+```
+
+- A protocol capture describes the protocol instead: its messages and fields, and the cases the trace covers.
+- One `## <trace>.pcap` section per trace. A continued lab adds sections and leaves the others unchanged.
+- References: link the primary sources first. That means the standard (RFC or 3GPP spec), the vulnerability record (NVD CVE page), the technique (MITRE ATT&CK, CWE, CAPEC), and the vendor or researcher write-up. For a detection rule, add the rule's own documentation if the caller gave it.
+- Cite only what you know is real. When web access exists, open each link and check its content, not only its status. A 200 response can be a bot-check or home page, and PDFs have no title:
+  - HTML page: its title or text names what you cite;
+  - PDF or plain-text file: the fact you cite is in it;
+  - NVD CVE page (`https://nvd.nist.gov/vuln/detail/CVE-…`): curl gets a bot page, so check the CVE with `https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-…` and link the detail page;
+  - a rule or source file in a repository: link it only on a public branch where it exists.
+
+  Drop a link that fails these checks. Without web access, put `(link not checked)` after each link. Never invent a URL, a CVE number or a technique ID. When there is no public source, write `No public reference found.` under `## References`.
+- Describe the mechanism, not a working exploit. Give the bytes and behaviour a detector needs, and nothing more (`references/safety.md`).
 
 ## Mission shapes
 
