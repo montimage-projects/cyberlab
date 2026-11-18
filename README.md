@@ -8,11 +8,51 @@
 
 # Verified attack and protocol traces from throwaway Docker labs
 
-**cyberlab** is an agent skill: describe what a trace must show, and it builds the smallest isolated Docker lab for that one mission, captures the traffic, tears the lab down and checks the pcap with tshark before handing it back.
+Tell your agent what a trace must show. **cyberlab** builds the smallest isolated Docker lab for that one job, captures the traffic, tears the lab down and checks the pcap with tshark before handing it back.
 
-[**Get started ->**](#quick-start)
+## Quick start
 
-## The problem
+You need Docker with Compose v2, and Node.js for `npx`.
+
+**1. Install the skill** (it asks which agent and scope; the paths below assume Claude Code, global):
+
+```bash
+npx skills add https://github.com/montimage-projects/cyberlab --skill cyberlab
+```
+
+**2. Check the host and build the tools image** (once):
+
+```bash
+~/.claude/skills/cyberlab/scripts/cyberlab doctor
+~/.claude/skills/cyberlab/scripts/cyberlab build
+```
+
+**3. Ask your agent for traces:**
+
+```text
+/cyberlab traces for an FTP brute-force rule: 5+ failed logins, and a normal login as benign
+```
+
+**What you get back:** a lab directory (under `~/.cache/cyberlab/` unless you name one) whose `out/` holds the verified traces, e.g. `attack.pcap` and `benign.pcap`, each with a `.md` document and a `.provenance.json`, plus `verify.json`. The agent ends with a short report: the traces, what was checked, and what is still uncertain.
+
+**4. Replay the traces with your own detector**, e.g. `snort -r out/attack.pcap` or `suricata -r out/attack.pcap`. The rule should fire on `attack.pcap` and stay silent on `benign.pcap`.
+
+Other installers (asm, manual copy) and tested platforms: [Installation options](#installation-options).
+
+### Without an agent
+
+The CLI runs the bundled templates on its own:
+
+```bash
+export PATH="$HOME/.claude/skills/cyberlab/scripts:$PATH"
+cyberlab new ~/labs/ftp --from ftp-bruteforce   # copy a template (cyberlab templates lists them)
+cyberlab run ~/labs/ftp attack                  # writes ~/labs/ftp/out/attack.pcap
+cyberlab run ~/labs/ftp benign                  # writes ~/labs/ftp/out/benign.pcap
+```
+
+Each `run` checks the isolation policy, starts the lab, captures, tears it down and verifies the trace against the template's `expect.json`. It prints one `PASS`/`FAIL` line per check, then `RESULT PASS`. The first run builds the template's images. `cyberlab status ~/labs/ftp` confirms nothing is left running. All commands: [Usage and CLI reference](#usage-and-cli-reference).
+
+## Why cyberlab
 
 | Without cyberlab | With cyberlab |
 |---|---|
@@ -108,80 +148,6 @@ Crafted traces skip the lab network entirely: `cyberlab craft` runs `craft_pcap.
 | Provenance and reproduction | `<trace>.provenance.json` and `<trace>.md` for every trace |
 | Host needs only Docker | tcpdump, tshark and Python run in the tools image |
 
-## Quick start
-
-Install the skill (it asks which agent and scope; the paths below assume Claude Code, global):
-
-```bash
-npx skills add https://github.com/montimage-projects/cyberlab --skill cyberlab
-```
-
-Check the host:
-
-```bash
-~/.claude/skills/cyberlab/scripts/cyberlab doctor
-```
-
-Build the tools image (`cyberlab/tools:local`: tcpdump, tshark, python3):
-
-```bash
-~/.claude/skills/cyberlab/scripts/cyberlab build
-```
-
-Ask your agent:
-
-```text
-/cyberlab traces for an FTP brute-force rule: 5+ failed logins, and a normal login as benign
-```
-
-Other installers (asm, manual copy) and tested platforms are in [Installation options](#installation-options).
-
-## Run a template by hand
-
-Each template ships its own `expect.json`. Put the CLI on your `PATH`:
-
-```bash
-export PATH="$HOME/.claude/skills/cyberlab/scripts:$PATH"
-```
-
-List the lab templates:
-
-```bash
-cyberlab templates
-```
-
-Copy a template into a lab directory:
-
-```bash
-cyberlab new ~/labs/ftp --from ftp-bruteforce
-```
-
-Check the isolation policy on the resolved compose file:
-
-```bash
-cyberlab check ~/labs/ftp
-```
-
-Capture the attack trace (writes `~/labs/ftp/out/attack.pcap`):
-
-```bash
-cyberlab run ~/labs/ftp attack
-```
-
-Capture the benign trace (writes `~/labs/ftp/out/benign.pcap`):
-
-```bash
-cyberlab run ~/labs/ftp benign
-```
-
-Confirm nothing is left running (prints `no cyberlab lab resources`):
-
-```bash
-cyberlab status ~/labs/ftp
-```
-
-The first run builds the template's images. Each `run` prints one `PASS`/`FAIL` line per check and per expectation, then `RESULT PASS` when the trace shows what `expect.json` asks for.
-
 ## Templates
 
 All five run end to end.
@@ -207,14 +173,6 @@ Escape tests from inside a lab (public IPs, DNS, `host.docker.internal`, every T
 ## Tested with a real detector
 
 On 2026-11-17, an mmt-security FTP brute-force rule gave **5 alerts** on a cyberlab `ftp-bruteforce` attack trace and **0** on the benign trace, replayed in [`examples/mmt-workbench`](examples/mmt-workbench/README.md).
-
-## Get started
-
-```bash
-npx skills add https://github.com/montimage-projects/cyberlab --skill cyberlab
-```
-
-[**SKILL.md ->**](skills/cyberlab/SKILL.md) · [**Templates ->**](skills/cyberlab/assets/labs) · [**Example consumer ->**](examples/mmt-workbench/README.md) · Apache-2.0
 
 ---
 
@@ -264,6 +222,8 @@ git clone https://github.com/montimage-projects/cyberlab.git && cp -R cyberlab/s
 Both installers ask which agent and scope to use when you leave those out. The commands in this README assume a global Claude Code install (`~/.claude/skills/cyberlab/`); adjust the path for another agent or a project install.
 
 </details>
+
+<a name="usage-and-cli-reference"></a>
 
 <details>
 <summary><strong>Usage and CLI reference</strong></summary>
