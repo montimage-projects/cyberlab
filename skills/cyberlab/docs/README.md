@@ -50,10 +50,11 @@ graph TD
 
 | Path | Description |
 |---|---|
-| `scripts/cyberlab` | CLI: doctor, build, templates, labs, new, check, run, craft, verify, down, status, nuke |
+| `scripts/cyberlab` | CLI: doctor, build, templates, labs, new, check, run, craft, verify, doc, down, status, nuke |
 | `scripts/lab_policy.py` | isolation policy for a resolved compose file |
 | `scripts/verify.py` | expectations check (tshark filters, frame counts, endpoints) |
 | `scripts/craft_pcap.py` | synthetic traces: payloads behind real Ethernet/IP/TCP/UDP headers |
+| `scripts/trace_doc.py` | per-trace provenance and reproduction document (`out/<trace>.md`) |
 | `assets/tools/` | the tools image (tcpdump, tshark, Python) |
 | `assets/labs/` | templates: ftp-bruteforce, h2c-rapid-reset, http-payloads, port-scan, protocol-capture |
 | `references/` | mission brief and expectations, lab authoring, crafted traces, safety |

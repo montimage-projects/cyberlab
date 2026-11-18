@@ -1,28 +1,14 @@
 {
   "traces": {
     "attack.pcap": [
-      {
-        "filter": "http2.type == 3",
-        "count_field": "http2.type",
-        "count_value": "3",
-        "min": 90
-      },
-      {
-        "filter": "http2.type == 1",
-        "min": 1,
-        "endpoints": 2
-      }
+      {"filter": "http2.type == 3", "count_field": "http2.type", "count_value": "3", "min": 90, "claim": "100 streams reset"},
+      {"filter": "http2.type == 3", "count_field": "http2.type", "count_value": "3", "window": 1, "min": 90, "claim": "resets sent back to back, no pause"},
+      {"filter": "http2.type == 1", "min": 1, "endpoints": 2}
     ],
     "benign.pcap": [
-      {
-        "filter": "http2.type == 1",
-        "min": 5,
-        "endpoints": 2
-      },
-      {
-        "filter": "http2.type == 3",
-        "max": 0
-      }
+      {"filter": "http2.type == 1", "min": 5, "endpoints": 2},
+      {"filter": "http2.type == 3", "max": 0, "claim": "streams never reset"},
+      {"filter": "http2.type == 1 && tcp.dstport == 80", "count_field": "http2.type", "count_value": "1", "window": 1, "max": 30, "claim": "requests paced 50 ms apart"}
     ]
   }
 }

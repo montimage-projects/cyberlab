@@ -17,6 +17,8 @@ A user or a calling agent says what the lab is **for**; you build the smallest l
 - **lab** — one victim, one generator, one capture sidecar on an internal Docker network.
 - **crafted** — a synthetic trace written with no network.
 - **expectations** — `<lab>/expect.json`: tshark filters with count bounds per trace; a trace is done only when they pass.
+- **trace document** — `<lab>/out/<trace>.md`, written by `run`, `craft`, `verify` and `doc`: what the trace contains, how the attack or protocol works (from `<lab>/mechanism.md`), how it was generated (command, images, input-file hashes), what was checked, and how someone else reproduces it.
+- **mechanism** — `<lab>/mechanism.md`: how the attack (or, for a protocol capture, the protocol) works, what each trace shows of it, and reference links.
 - **`$S`** — this skill's `scripts/` directory (`$S/cyberlab --help`).
 
 ## Prerequisites
@@ -48,7 +50,7 @@ Read `references/mission.md`.
    - **Continue** an existing lab only when its `Scope:` covers the request (same task, same protocol): the lab the caller names, else the one `$S/cyberlab labs` lists. Read its `mission.md`, `expect.json` and `out/verify.json` first.
    - **Start** a new lab when no lab's scope covers it: the directory the caller names if it holds no lab yet, else `${CYBERLAB_HOME:-$HOME/.cache/cyberlab}/<YYYYMMDD-HHMMSS>-<slug>`.
    - Never put an unrelated task in an existing lab, even a named one: a person gets one question, a calling skill gets BLOCKED naming the scope mismatch. When the fit is unclear and a person asked, ask once.
-2. Write the brief. New lab: write `<lab>/mission.md` in the brief format: goal, scope, consumer, protocol, traces with what each must show, generator, destination, out of scope. Continued lab: append a line under `Traces:` for each new trace, and a dated `## Log` entry with the request; leave the goal, scope and the lines of existing traces as they are.
+2. Write the brief. Each `Traces:` line opens that trace's document, so say there what a reader will find in the trace (messages, counts, the variant). New lab: write `<lab>/mission.md` in the brief format: goal, scope, consumer, protocol, traces with what each must show, generator, destination, out of scope. Continued lab: append a line under `Traces:` for each new trace, and a dated `## Log` entry with the request; leave the goal, scope and the lines of existing traces as they are.
 3. When another skill or agent is the caller, derive every line from its request and do not ask questions; if the request lacks what the trace needs (the protocol, or message formats for a protocol with no implementation), return BLOCKED to the caller naming what is missing. When a person asked and the protocol, attack variant or consumer is missing, ask once in one message; mark every unanswered value `ASSUMED:`.
 4. A request with several unrelated tasks becomes several missions; run them one after another, each with its own lab. Several traces for one task stay in one mission.
 
@@ -60,7 +62,7 @@ Apply `references/mission.md` → *Choose the generator*: a **lab** for timing, 
 
 ## Step 3 — Write the expectations
 
-Write `<lab>/expect.json` from the brief before generating anything, using the defaults of `references/mission.md` → *Mission shapes*. In a continued lab, add entries for the new traces only; an existing trace's expectations change only when its brief line was wrong (say so). A benign trace asserts the protocol is present (`min` ≥ 1, `endpoints: 2`), not only that the attack is absent; a protocol capture asserts both directions. Done when every trace in the brief has an expectation (`run` and `craft` refuse a trace without one).
+Write `<lab>/expect.json` from the brief before generating anything, using the defaults of `references/mission.md` → *Mission shapes*. Every claim in a `Traces:` line (count, rate, pacing, variety, field relation, variant) gets an expectation tagged `"claim"`, and a rule the consumer named is checked from both sides: the attack above its threshold in its window, the benign trace under it (`references/mission.md` → *Expectations*). In a continued lab, add entries for the new traces only; an existing trace's expectations change only when its brief line was wrong (say so). A benign trace asserts the protocol is present (`min` ≥ 1, `endpoints: 2`), not only that the attack is absent; a protocol capture asserts both directions. Done when every trace in the brief has an expectation (`run` and `craft` refuse a trace without one), and every claim of its `Traces:` line has a check.
 
 ## Step 4 — Build the lab
 
@@ -68,14 +70,15 @@ Write `<lab>/expect.json` from the brief before generating anything, using the d
 
 1. Run `$S/cyberlab templates`.
 2. Run `$S/cyberlab new <lab> --from <closest template>`. It copies the template into the lab directory and keeps the `mission.md` and `expect.json` you already wrote.
-3. Change only what the mission needs: victim image and version, generator, modes, capture filter.
+3. Change only what the mission needs: victim image and version, generator, modes, capture filter. Then remove what the template carried for its own attack and this lab no longer does: comments, config directives, modes, payload files and `mechanism.md` text (`grep -ri` the lab for the template's attack terms). A leftover misleads whoever reproduces the trace.
 4. Run `$S/cyberlab check <lab>`. Fix each `FAIL` line until it prints `RESULT PASS isolation policy`.
+5. Write `<lab>/mechanism.md` (`references/mission.md` → *Mechanism*). `new` copied the template's: change it to match what this lab sends.
 
-**Crafted:** read `references/crafted.md`. Write `<lab>/payloads.txt` (or `<lab>/gen.py`) from the specification or attack description. Nothing to check: crafting has no network.
+**Crafted:** read `references/crafted.md`. Write `<lab>/payloads.txt` (or `<lab>/gen.py`) from the specification or attack description, and `<lab>/mechanism.md` (`references/mission.md` → *Mechanism*). Nothing to check: crafting has no network.
 
-**Continued lab:** skip `new` when the lab already has a `docker-compose.yml` (`new` refuses it); a lab holding only crafted traces runs `new` the first time it needs a lab trace. Add one generator mode per new trace (`references/lab-authoring.md` → *Adding a trace*) without changing what existing modes send, then run `$S/cyberlab check <lab>`: it checks every mode in `expect.json`.
+**Continued lab:** skip `new` when the lab already has a `docker-compose.yml` (`new` refuses it); a lab holding only crafted traces runs `new` the first time it needs a lab trace. Add one generator mode per new trace (`references/lab-authoring.md` → *Adding a trace*) without changing what existing modes send, then run `$S/cyberlab check <lab>`: it checks every mode in `expect.json`. Add a `## <trace>.pcap` section to `mechanism.md` for each new trace, and leave the other sections as they are.
 
-Done when `check` prints `RESULT PASS` (lab), or the payload or script file exists (crafted).
+Done when `check` prints `RESULT PASS` (lab), or the payload or script file exists (crafted); and `mechanism.md` has the general text, one section per trace of this request and a `## References` list.
 
 ## Step 5 — Generate and verify
 
@@ -84,25 +87,29 @@ $S/cyberlab run <lab> <mode>        # lab, once per new trace: mode attack -> ou
 $S/cyberlab craft <lab> <trace.pcap> -- --parent tcp:port=<port> --payloads-file payloads.txt   # crafted
 ```
 
-Expected output: `PASS runtime`, `PASS teardown`, `PASS capture 0 packets dropped` (lab only), `NOTE trace`, one `PASS`/`FAIL` line per expectation, then `RESULT PASS`. A run can take up to `CYBERLAB_TIMEOUT` (300 s) plus image pulls and builds: give the shell command a longer timeout or run it in the background; an interrupted run tears its lab down.
+Expected output: `PASS runtime`, `PASS teardown`, `PASS capture 0 packets dropped` (lab only), `NOTE trace`, one `PASS`/`FAIL` line per expectation, `RESULT PASS`, then `PASS doc out/<trace>.md`, followed by a `WARN doc` line for each missing part of the document (no `Traces:` line, no `mechanism.md` or no section for the trace, no references). A run can take up to `CYBERLAB_TIMEOUT` (300 s) plus image pulls and builds: give the shell command a longer timeout or run it in the background; an interrupted run tears its lab down.
 
-Run only the traces this request adds: `run` and `craft` overwrite `out/<trace>` and its provenance, so an existing trace is regenerated only when the request asks for it.
+Run only the traces this request adds: `run` and `craft` overwrite `out/<trace>`, its provenance and its document, so an existing trace is regenerated only when the request asks for it.
 
 1. On a `FAIL` expectation, fix the generator or the lab, then rerun. Change an expectation only when the brief was wrong: fix the brief first and say so.
 2. On an `Error:` line, apply the fix it names (`references/lab-authoring.md` → *Failures seen before*).
 3. Stop after 3 failed attempts for one trace and report it as BLOCKED with the last output.
 4. Never replace a failing lab trace with a crafted one without the caller's agreement; if it agrees, the trace is labelled synthetic.
 
-Done when every trace this request adds ends with `RESULT PASS`, or is BLOCKED after 3 attempts.
+Done when every trace this request adds ends with `RESULT PASS` and has its `out/<trace>.md`, or is BLOCKED after 3 attempts. `WARN doc` lines are fixed in Step 6.
 
 ## Step 6 — Hand off
 
 1. Run `$S/cyberlab status <lab>`. If it lists anything, run `$S/cyberlab down <lab>`.
-2. Run `$S/cyberlab verify <lab>` once more: it rechecks every trace of the mission, earlier ones included, and `out/verify.json` then holds every trace's result. An earlier trace that now fails means its expectations were changed: report it.
-3. Copy the traces to the caller's destination only if the brief names one.
-4. Print the hand-off report (below), taking each trace's origin, frames and sha256 from `out/<trace>.provenance.json`.
+2. Run `$S/cyberlab verify <lab>` once more: it rechecks every trace of the mission, earlier ones included, `out/verify.json` then holds every trace's result, and every `out/<trace>.md` is rewritten with it. An earlier trace that now fails means its expectations were changed: report it. A trace whose document marks an input file **changed** was made from an earlier version of the lab: say so.
+3. Check each new trace against its description. `mechanism.md` and the `Traces:` line were written before the run, from what the lab was meant to send. Read the trace's `out/<trace>.md` (its packet list, conversations and verified counts) and its generator log, and compare:
+   - The text says what the trace does not hold (a count, a pacing, an address, a field value): correct the text to describe the trace as it is, and note the difference under the trace's `## <trace>.pcap` section.
+   - The difference means the trace no longer shows what the consumer needs (a rate below the rule's threshold, an attack variant that never happened): the trace has not met its mission. Go back to Step 5 and fix the generator, or report it under Uncertainty. Never paper over it in the text.
+   Then run `$S/cyberlab doc <lab>`. It must print no `WARN doc` line for a trace of this request, except `lab inputs changed`, which is reported, not fixed.
+4. Copy the traces to the caller's destination only if the brief names one, each with its `<trace>.md` and `<trace>.provenance.json`. Someone reproducing a trace also needs the lab directory (the document lists its files and their sha256).
+5. Print the hand-off report (below), taking each trace's origin, frames and sha256 from `out/<trace>.provenance.json`.
 
-Done when `status <lab>` prints `no cyberlab lab resources` and the report is printed.
+Done when `status <lab>` prints `no cyberlab lab resources`, `doc` prints no `WARN doc` line for this request's traces (other than `lab inputs changed`, reported), and the report is printed.
 
 ## Hand-off report
 
@@ -110,17 +117,19 @@ Short, in this order:
 
 ```text
 Result: COMPLETE | PARTIAL | BLOCKED — <goal from the brief>
-Traces: <path> (<frames> frames, sha256 <first 16>, origin: lab capture | crafted (synthetic)) — one line per trace this request produced
+Traces: <path> (<frames> frames, sha256 <first 16>, origin: lab capture | crafted (synthetic), doc <path>.md) — one line per trace this request produced
 Lab: <lab directory>; also holds <earlier trace names, each PASS/FAIL from verify> (continued lab only)
 Evidence: <each expectation with its count, from verify>; lab: policy, runtime, teardown and capture-drop checks PASS (crafted: "no network used")
-Uncertainty: <ASSUMED values; synthetic traces; timing not real if crafted; Docker-level isolation; anything not verified>
+Uncertainty: <ASSUMED values; synthetic traces; timing not real if crafted; Docker-level isolation; differences between the brief and the trace found in Step 6; a rule whose logic would also match the benign trace; expected verdicts not confirmed by running the detector; anything not verified>
 Decision: <what the caller or user must decide, or "No approval needed.">
 ```
 
 - Result, Traces and Evidence cover the traces this request produced; the `Lab:` line covers the rest of the mission.
 - **COMPLETE**: every trace passed, from a lab capture or a crafted trace the brief chose with a reason. **PARTIAL**: every trace passed, but a value is ASSUMED or a crafted trace stands in for a lab one. **BLOCKED**: a trace failed 3 times, or Docker is unavailable.
-- Name `out/<trace>.provenance.json` and `out/verify.json` as the full evidence; do not paste them.
+- Name `out/<trace>.md` (the reproduction document), `out/<trace>.provenance.json` and `out/verify.json` as the full evidence; do not paste them.
+- Reproduction: a crafted trace from `craft_pcap.py` reproduces byte for byte (same sha256); a lab capture reproduces as an equivalent trace that passes the same expectations, never the same file (timestamps, sequence numbers, ports and addresses change). Say which applies when the caller asks for reproducible traces.
 - When the caller is a person and has not replied, their understanding of the traces is unconfirmed: say so.
+- Verdicts (`fires` / `stays silent`) are expectations from the rule's condition: cyberlab never runs the detector. Say so, and that the consumer confirms them by replaying the traces.
 
 ## Step Completion Reports
 

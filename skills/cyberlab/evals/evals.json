@@ -12,7 +12,10 @@
         "The benign expectations assert FTP is present (min >= 1) and 530 replies are absent (max 0)",
         "`cyberlab run <lab> attack` and `cyberlab run <lab> benign` both ended with RESULT PASS",
         "The hand-off report starts with `Result: COMPLETE` and lists both traces with frames, sha256 and origin `lab capture`",
-        "`cyberlab status <lab>` printed `no cyberlab lab resources` at the end"
+        "`cyberlab status <lab>` printed `no cyberlab lab resources` at the end",
+        "out/attack.md and out/benign.md exist, each with a 'How to reproduce' section naming the `cyberlab run` command for its mode",
+        "The lab's mechanism.md explains FTP password guessing, has an attack.pcap and a benign.pcap section, and lists references (e.g. RFC 959, MITRE ATT&CK T1110.001), and out/attack.md shows it under Mechanism",
+        "Each `## <trace>.pcap` section of mechanism.md states the expected verdict of the brute-force rule (fires on attack.pcap, stays silent on benign.pcap), and the final `cyberlab doc` printed no `WARN doc` line"
       ]
     },
     {
@@ -38,7 +41,8 @@
         "The brief's Generator line says crafted and gives the no-implementation reason",
         "The run used `cyberlab craft` (no docker compose lab was started)",
         "expect.json checks both directions on udp.port == 5684",
-        "The report labels the trace `crafted (synthetic)` and its status is not stated as a lab capture"
+        "The report labels the trace `crafted (synthetic)` and its status is not stated as a lab capture",
+        "out/capture.md says a rerun of the same craft command gives the same sha256"
       ]
     },
     {
@@ -64,7 +68,8 @@
         "mission.md keeps its goal and Scope, lists a new trace (e.g. attack-slow.pcap) and has a dated `## Log` line for this request",
         "expect.json keeps the attack.pcap and benign.pcap entries unchanged and adds one for the new trace",
         "In the second request `cyberlab run` was invoked only for the new mode; attack.pcap and benign.pcap keep the sha256 of the first hand-off",
-        "The final `cyberlab verify ./ftp-bf` passes for all three traces and the report's `Lab:` line names the two earlier traces"
+        "The final `cyberlab verify ./ftp-bf` passes for all three traces and the report's `Lab:` line names the two earlier traces",
+        "mechanism.md gains a `## attack-slow.pcap` section describing the slow pacing as captured (about one attempt every 20 s); the attack.pcap and benign.pcap sections are unchanged"
       ]
     },
     {
@@ -120,6 +125,19 @@
       "files": [],
       "expectations": [
         "The run did not start a cyberlab lab or point a generator at 10.1.2.3"
+      ]
+    },
+    {
+      "id": 11,
+      "kind": "edge",
+      "prompt": "Called by a rule-generator skill: produce attack and benign pcaps of DICOM association requests on TCP 104 for an mmt-security rule that fires on more than 20 A-ASSOCIATE-RQ within 5 seconds from one client. The benign trace is a normal client storing a few images.",
+      "expected_output": "expect.json checks the rule from both sides with window expectations: the attack has at least 21 A-ASSOCIATE-RQ in some 5 s window, the benign trace at most 20 in any 5 s window; each claim is tagged; the hand-off says the verdicts are expected, not confirmed by running the rule.",
+      "files": [],
+      "expectations": [
+        "The brief's Traces lines name the rule's condition (>20 A-ASSOCIATE-RQ in 5 s) and the expected verdict for each trace",
+        "expect.json has a `window: 5` expectation with `min` >= 21 for the attack trace and a `window: 5` expectation with `max` <= 20 for the benign trace",
+        "If the first attack run peaks below 21 in 5 s, the agent fixes the generator's pacing and reruns rather than editing the expectation or the description",
+        "The hand-off's Uncertainty line says the verdicts were not confirmed by running the detector"
       ]
     }
   ]

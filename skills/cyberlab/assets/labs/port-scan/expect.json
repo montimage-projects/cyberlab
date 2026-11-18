@@ -1,29 +1,16 @@
 {
   "traces": {
     "attack.pcap": [
-      {
-        "filter": "tcp.flags.syn == 1 && tcp.flags.ack == 0",
-        "min": 500
-      },
-      {
-        "filter": "tcp.flags.reset == 1",
-        "min": 500
-      }
+      {"filter": "tcp.flags.syn == 1 && tcp.flags.ack == 0", "min": 1000, "claim": "a SYN to each of ports 1-1024"},
+      {"filter": "tcp.flags.syn == 1 && tcp.flags.ack == 0", "distinct": "tcp.dstport", "min": 1000, "claim": "many different destination ports"},
+      {"filter": "tcp.flags.reset == 1 && tcp.flags.ack == 1", "min": 1000, "claim": "RST/ACK from every closed port"},
+      {"filter": "tcp.flags.syn == 1 && tcp.flags.ack == 1", "min": 1, "claim": "one completed handshake on the open port"}
     ],
     "benign.pcap": [
-      {
-        "filter": "http.request",
-        "min": 5
-      },
-      {
-        "filter": "http",
-        "min": 1,
-        "endpoints": 2
-      },
-      {
-        "filter": "tcp.flags.syn == 1 && tcp.flags.ack == 0",
-        "max": 10
-      }
+      {"filter": "http.request", "min": 5},
+      {"filter": "http", "min": 1, "endpoints": 2},
+      {"filter": "tcp.flags.syn == 1 && tcp.flags.ack == 0", "distinct": "tcp.dstport", "max": 1, "claim": "one destination port"},
+      {"filter": "tcp.flags.syn == 1 && tcp.flags.ack == 0", "max": 10}
     ]
   }
 }

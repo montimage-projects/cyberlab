@@ -21,6 +21,8 @@
 #   craft <lab> <trace.pcap> --script <file.py> [-- args]
 #                                 write a synthetic trace with no network at all, then verify it
 #   verify <lab> [trace.pcap]...  check traces in <lab>/out against <lab>/expect.json
+#   doc <lab> [trace.pcap]...     (re)write out/<trace>.md: what the trace contains, how it was
+#                                 generated and how to reproduce it (run, craft and verify write it too)
 #   down <lab>                    tear one lab down
 #   status [lab]                  containers, networks and volumes of every cyberlab lab (or one);
 #                                 the dry-run of nuke
@@ -178,16 +180,37 @@ runtime_isolation() { # <project>: verify the RUNNING lab; fails when nothing is
   return "$bad"
 }
 
-write_provenance() { # <lab> <trace> <origin> <generator> <extra json fields>
-  local lab="$1" trace="$2" sha pk
-  local info; info="$(tools -v "$lab/out:/out:ro" -- sh -c "capinfos -M -c '/out/$trace' | awk -F': *' '/Number of packets/{print \$2}'; sha256sum '/out/$trace' | cut -d' ' -f1")"
-  pk="$(echo "$info" | sed -n 1p)"; sha="$(echo "$info" | sed -n 2p)"
-  local gen; gen="$(printf '%s' "$4" | sed 's/\\/\\\\/g; s/"/\\"/g')"
-  cat >"$lab/out/${trace%.pcap}.provenance.json" <<EOF
-{"trace": "$trace", "origin": "$3", "generator": "$gen", "lab": "$(basename "$lab")",
- "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "frames": ${pk:-0}, "sha256": "$sha"$5}
-EOF
-  echo "${pk:-0} $sha"
+skill_version() { sed -n 's/^ *version: *//p' "$SKILL_DIR/SKILL.md" | head -1; }
+shq() { # quote arguments for a command line a person can paste
+  local out="" a q="'"
+  for a in "$@"; do case "$a" in ""|*[!A-Za-z0-9_./:=@%+,-]*) a="$q${a//$q/$q\\$q$q}$q";; esac; out="$out${out:+ }$a"; done
+  printf '%s' "$out"
+}
+jstr() { printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"; }
+
+write_provenance() { # <lab> <trace> <origin> <generator> <command> <compose json|null> <env json> <extra fields ", k: v"> [image id]...
+  local lab="$1" trace="$2" origin="$3" gen="$4" command="$5" compose="$6" env="$7" extra="$8"; shift 8
+  local froms ref o inspect="" ids=""
+  froms="$(tools -v "$lab:/lab:ro" -- python3 /cyberlab/trace_doc.py lab-files --lab /lab 2>/dev/null |
+           tools -- python3 -c 'import json,sys; print("\n".join(json.load(sys.stdin)["froms"]))' 2>/dev/null)"
+  for ref in "$@"; do ids="$ids${ids:+,}$(jstr "$ref")"; done
+  for ref in "$@" $froms "$TOOLS"; do   # one by one: an image that is not present must not hide the others
+    o="$(docker image inspect "$ref" 2>/dev/null)" || continue
+    o="${o#\[}"; o="${o%\]}"; inspect="$inspect${inspect:+,}$o"
+  done
+  local ctx; ctx="{\"lab_name\": $(jstr "$(basename "$lab")"), \"lab_host_dir\": $(jstr "$lab"),
+    \"host\": {\"docker\": $(jstr "$(docker version -f '{{.Server.Version}}' 2>/dev/null)"), \"platform\": $(jstr "$(docker info -f '{{.OSType}}/{{.Architecture}}' 2>/dev/null)")},
+    \"tools_id\": $(jstr "$(docker image inspect -f '{{.Id}}' "$TOOLS" 2>/dev/null)"),
+    \"image_ids\": [$ids], \"inspect\": [$inspect], \"compose\": ${compose:-null}, \"env\": ${env:-null}$extra}"
+  printf '%s' "$ctx" | tools -v "$lab:/lab" -- python3 /cyberlab/trace_doc.py provenance --lab /lab --trace "$trace" \
+    --origin "$origin" --generator "$gen" --command "$command" --version "$(skill_version)" --tools-image "$TOOLS"
+}
+
+write_docs() { # <lab> [trace]...: out/<trace>.md, the trace's reproduction document (never fails the command)
+  local lab="$1"; shift
+  local a=(); for t in "$@"; do a+=(--trace "$t"); done
+  tools -v "$lab:/lab" -- python3 /cyberlab/trace_doc.py doc --lab /lab --lab-name "$(basename "$lab")" ${a[@]+"${a[@]}"} ||
+    echo "NOTE doc    could not write every trace document (above); rerun: cyberlab doc $lab"
 }
 
 verify_traces() { # <lab> <trace>...
@@ -207,7 +230,7 @@ cmd_run() {
   policy "$lab" --runner || die "the lab breaks the isolation policy (FAIL lines above); it was not started." 2
   local proj; proj="$(project_of "$lab")"
   case "$proj" in cyberlab-*) ;; *) die "cannot read the lab's project name (got '$proj')." 2;; esac
-  mkdir -p "$lab/out" && rm -f "$lab/out/$mode.pcap" "$lab/out/$mode.pcap.rejected" "$lab/out/$mode.provenance.json"
+  mkdir -p "$lab/out" && rm -f "$lab/out/$mode.pcap" "$lab/out/$mode.pcap.rejected" "$lab/out/$mode.provenance.json" "$lab/out/$mode.md"
   cd "$lab" || die "cannot cd to $lab"
   cleanup() { docker compose down -v --remove-orphans >/dev/null 2>&1; }
   reject() { [ -f "out/$mode.pcap" ] && mv "out/$mode.pcap" "out/$mode.pcap.rejected"; die "$1" 2; }
@@ -236,7 +259,11 @@ cmd_run() {
   rm -f "out/$mode.pcap"   # only tcpdump's file, copied from the capture container, may become the trace
   local copied=1; docker compose cp "capture:/cap/$mode.pcap" "out/$mode.pcap" >/dev/null 2>&1 || copied=0
   local dropped; dropped="$(sed -n 's/^\([0-9][0-9]*\) packets\{0,1\} dropped by kernel.*/\1/p' "out/$mode.capture.log" | tail -1)"
-  local images; images="$(docker compose images --format json 2>/dev/null | tools -- python3 -c 'import json,sys; print(json.dumps(sorted({i["Repository"]+":"+i["Tag"]+"@"+i["ID"][:19] for i in json.load(sys.stdin)})))' 2>/dev/null || echo '[]')"
+  local imgjson images image_ids compose_resolved
+  imgjson="$(docker compose images --format json 2>/dev/null)"
+  images="$(printf '%s' "$imgjson" | tools -- python3 -c 'import json,sys; print(json.dumps(sorted({i["Repository"]+":"+i["Tag"]+"@"+i["ID"][:19] for i in json.load(sys.stdin)})))' 2>/dev/null || echo '[]')"
+  image_ids="$(printf '%s' "$imgjson" | tools -- python3 -c 'import json,sys; print(" ".join(sorted({i["ID"] for i in json.load(sys.stdin)})))' 2>/dev/null)"
+  compose_resolved="$(compose_json "$lab" 2>/dev/null)" || compose_resolved=null
   cleanup; trap - EXIT INT TERM
   local left; left="$(docker ps -aq --filter "label=com.docker.compose.project=$proj")$(docker network ls -q --filter "label=com.docker.compose.project=$proj")"
   [ -z "$left" ] || die "lab resources still present after teardown. Run: cyberlab down $lab" 2
@@ -247,9 +274,14 @@ cmd_run() {
   [ -n "$dropped" ] || reject "no tcpdump summary in out/$mode.capture.log: cannot tell whether packets were lost."
   [ "$dropped" = 0 ] || reject "the capture dropped $dropped packet(s) (out/$mode.capture.log): the trace is incomplete. Raise tcpdump's buffer (-B 65536) or slow the generator, then run again."
   echo "PASS capture 0 packets dropped by kernel"
-  local pk_sha; pk_sha="$(write_provenance "$lab" "$mode.pcap" "lab capture" "$(basename "$lab") mode $mode" ", \"project\": \"$proj\", \"generator_exit\": $rc, \"dropped\": 0, \"images\": $images")"
+  local pk_sha; pk_sha="$(write_provenance "$lab" "$mode.pcap" "lab capture" "$(basename "$lab") mode $mode" "cyberlab run <lab> $mode" \
+    "$compose_resolved" "{\"MODE\": $(jstr "$mode"), \"PCAP\": $(jstr "$mode"), \"CYBERLAB_TIMEOUT\": $(jstr "$TIMEOUT")}" \
+    ", \"project\": \"$proj\", \"generator_exit\": $rc, \"dropped\": 0, \"images\": $images" $image_ids)"
+  [ -f "$lab/out/$mode.provenance.json" ] || die "could not write out/$mode.provenance.json (above): the trace has no provenance." 2
   echo "NOTE trace   out/$mode.pcap: ${pk_sha%% *} frames, provenance out/$mode.provenance.json"
-  verify_traces "$lab" "$mode.pcap"
+  local vrc=0; verify_traces "$lab" "$mode.pcap" || vrc=$?
+  write_docs "$lab" "$mode.pcap"
+  return "$vrc"
 }
 
 cmd_craft() {
@@ -266,27 +298,47 @@ cmd_craft() {
     [ -f "$lab/$script" ] || die "craft: script $lab/$script not found (it must sit inside the lab directory)."
   fi
   [ "${1:-}" = "--" ] && shift
-  mkdir -p "$lab/out" && rm -f "$lab/out/$trace"
-  local gen
+  mkdir -p "$lab/out" && rm -f "$lab/out/$trace"   # provenance and document are rewritten in place (atomically)
+  local gen cmdline
   if [ -n "$script" ]; then
     gen="python3 $script $*"
+    cmdline="cyberlab craft <lab> $trace --script $(shq "$script")${1+ -- $(shq "$@")}"
     tools -v "$lab:/lab" -w /lab -e "OUT=/lab/out/$trace" -- python3 "/lab/$script" "$@" || die "craft script failed (above)." 2
   else
     gen="craft_pcap.py $*"
+    cmdline="cyberlab craft <lab> $trace -- $(shq "$@")"
     tools -v "$lab:/lab" -w /lab -- python3 /cyberlab/craft_pcap.py --out "/lab/out/$trace" "$@" || die "craft_pcap.py failed (above). Run 'python3 $SKILL_DIR/scripts/craft_pcap.py --help' for its arguments." 2
   fi
   [ -s "$lab/out/$trace" ] || die "craft: $lab/out/$trace was not written. A --script must write to \$OUT." 2
-  local pk_sha; pk_sha="$(write_provenance "$lab" "$trace" "crafted (synthetic)" "$gen" "")"
+  local pk_sha; pk_sha="$(write_provenance "$lab" "$trace" "crafted (synthetic)" "$gen" "$cmdline" null null "")"
+  [ -f "$lab/out/${trace%.pcap}.provenance.json" ] || die "could not write out/${trace%.pcap}.provenance.json (above): the trace has no provenance." 2
   echo "NOTE trace   out/$trace: ${pk_sha%% *} frames, SYNTHETIC, provenance out/${trace%.pcap}.provenance.json"
-  verify_traces "$lab" "$trace"
+  local vrc=0; verify_traces "$lab" "$trace" || vrc=$?
+  write_docs "$lab" "$trace"
+  return "$vrc"
 }
 
 cmd_verify() {
   [ $# -ge 1 ] || die "usage: cyberlab verify <lab> [trace.pcap]..."
   local lab="$1"; shift
   [ -f "$lab/expect.json" ] || die "no $lab/expect.json (references/mission.md says how to write it)."
+  local t ts=(); for t in "$@"; do [ "$t" = "--trace" ] || ts+=("$t"); done   # accept "--trace X" too
+  set -- ${ts[@]+"${ts[@]}"}
   need_docker; need_tools
-  verify_traces "$(abspath "$lab")" "$@"
+  lab="$(abspath "$lab")"
+  local vrc=0; verify_traces "$lab" "$@" || vrc=$?
+  [ -d "$lab/out" ] && write_docs "$lab" "$@"
+  return "$vrc"
+}
+
+cmd_doc() { # <lab> [trace.pcap]...: (re)write out/<trace>.md from mission.md, expect.json, verify.json and provenance
+  [ $# -ge 1 ] || die "usage: cyberlab doc <lab> [trace.pcap]..."
+  local lab="$1"; shift
+  [ -d "$lab/out" ] || die "no $lab/out: generate a trace first (cyberlab run or craft)."
+  need_docker; need_tools
+  lab="$(abspath "$lab")"
+  local a=(); for t in "$@"; do a+=(--trace "$t"); done
+  tools -v "$lab:/lab" -- python3 /cyberlab/trace_doc.py doc --lab /lab --lab-name "$(basename "$lab")" ${a[@]+"${a[@]}"} || die "trace_doc.py failed (above)." 2
 }
 
 cmd_down() {
@@ -325,7 +377,7 @@ cmd_nuke() {
 c="${1:-}"; [ $# -gt 0 ] && shift
 case "$c" in
   doctor) cmd_doctor "$@";; build) cmd_build "$@";; templates) cmd_templates;; labs) cmd_labs "$@";; new) cmd_new "$@";;
-  check) cmd_check "$@";; run) cmd_run "$@";; craft) cmd_craft "$@";; verify) cmd_verify "$@";;
+  check) cmd_check "$@";; run) cmd_run "$@";; craft) cmd_craft "$@";; verify) cmd_verify "$@";; doc) cmd_doc "$@";;
   down) cmd_down "$@";; status) cmd_status "$@";; nuke) cmd_nuke;;
   -h|--help|help) usage;;
   "") usage; exit 1;;
