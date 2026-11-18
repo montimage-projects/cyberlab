@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/logo-white.svg">
+    <img src="assets/logo/logo-full.svg" alt="cyberLab" width="320">
+  </picture>
+</p>
+
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Docker](https://img.shields.io/badge/requires-Docker_Compose_v2-2496ED)
 ![Agent skill](https://img.shields.io/badge/agent_skill-cyberlab-555)

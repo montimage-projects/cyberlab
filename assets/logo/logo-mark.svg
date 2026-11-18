@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="cyberLab mark">
+  <!-- cyberLab mark (CANONICAL: every variant copies these d strings) -->
+  <!-- Layer 1, outer seal: the lab boundary with no route out -->
+  <path d="M14,6 H50 Q58,6 58,14 V50 Q58,58 50,58 H14 Q6,58 6,50 V14 Q6,6 14,6 Z"
+        fill="none" stroke="#8B7D6B" stroke-width="2.5" stroke-linejoin="round"/>
+  <!-- Layer 2, chamber: the internal Docker network -->
+  <path d="M17,11 H47 Q53,11 53,17 V47 Q53,53 47,53 H17 Q11,53 11,47 V17 Q11,11 17,11 Z"
+        fill="#1A1A1A"/>
+  <!-- Layer 3, trace: captured traffic that resolves into a check (verified) -->
+  <path d="M16,33 H22 L26,24 L31,42 L35,33 L39,37 L48,26"
+        fill="none" stroke="#E9AB34" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
