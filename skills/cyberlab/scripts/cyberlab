@@ -206,6 +206,11 @@ write_provenance() { # <lab> <trace> <origin> <generator> <command> <compose jso
     --origin "$origin" --generator "$gen" --command "$command" --version "$(skill_version)" --tools-image "$TOOLS"
 }
 
+no_provenance() { # <lab> <trace>: write_provenance failed. An earlier run's provenance and document
+  # describe another file, so remove them rather than leave them next to the new trace.
+  rm -f "$1/out/${2%.pcap}.provenance.json" "$1/out/${2%.pcap}.md"
+  die "could not write out/${2%.pcap}.provenance.json (above): the trace has no provenance." 2
+}
 write_docs() { # <lab> [trace]...: out/<trace>.md, the trace's reproduction document (never fails the command)
   local lab="$1"; shift
   local a=(); for t in "$@"; do a+=(--trace "$t"); done
@@ -276,8 +281,8 @@ cmd_run() {
   echo "PASS capture 0 packets dropped by kernel"
   local pk_sha; pk_sha="$(write_provenance "$lab" "$mode.pcap" "lab capture" "$(basename "$lab") mode $mode" "cyberlab run <lab> $mode" \
     "$compose_resolved" "{\"MODE\": $(jstr "$mode"), \"PCAP\": $(jstr "$mode"), \"CYBERLAB_TIMEOUT\": $(jstr "$TIMEOUT")}" \
-    ", \"project\": \"$proj\", \"generator_exit\": $rc, \"dropped\": 0, \"images\": $images" $image_ids)"
-  [ -f "$lab/out/$mode.provenance.json" ] || die "could not write out/$mode.provenance.json (above): the trace has no provenance." 2
+    ", \"project\": \"$proj\", \"generator_exit\": $rc, \"dropped\": 0, \"images\": $images" $image_ids)" && [ -n "$pk_sha" ] ||
+    no_provenance "$lab" "$mode.pcap"
   echo "NOTE trace   out/$mode.pcap: ${pk_sha%% *} frames, provenance out/$mode.provenance.json"
   local vrc=0; verify_traces "$lab" "$mode.pcap" || vrc=$?
   write_docs "$lab" "$mode.pcap"
@@ -310,8 +315,8 @@ cmd_craft() {
     tools -v "$lab:/lab" -w /lab -- python3 /cyberlab/craft_pcap.py --out "/lab/out/$trace" "$@" || die "craft_pcap.py failed (above). Run 'python3 $SKILL_DIR/scripts/craft_pcap.py --help' for its arguments." 2
   fi
   [ -s "$lab/out/$trace" ] || die "craft: $lab/out/$trace was not written. A --script must write to \$OUT." 2
-  local pk_sha; pk_sha="$(write_provenance "$lab" "$trace" "crafted (synthetic)" "$gen" "$cmdline" null null "")"
-  [ -f "$lab/out/${trace%.pcap}.provenance.json" ] || die "could not write out/${trace%.pcap}.provenance.json (above): the trace has no provenance." 2
+  local pk_sha; pk_sha="$(write_provenance "$lab" "$trace" "crafted (synthetic)" "$gen" "$cmdline" null null "")" && [ -n "$pk_sha" ] ||
+    no_provenance "$lab" "$trace"
   echo "NOTE trace   out/$trace: ${pk_sha%% *} frames, SYNTHETIC, provenance out/${trace%.pcap}.provenance.json"
   local vrc=0; verify_traces "$lab" "$trace" || vrc=$?
   write_docs "$lab" "$trace"
