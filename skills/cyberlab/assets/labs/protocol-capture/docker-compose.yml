@@ -25,4 +25,4 @@ services:
       victim: { condition: service_started }
       capture: { condition: service_healthy }
     volumes: ["./gen.sh:/lab/gen.sh:ro"]
-    command: sh /lab/gen.sh victim
+    command: sh /lab/gen.sh victim ${MODE:-capture}

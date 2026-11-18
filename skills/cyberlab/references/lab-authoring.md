@@ -2,7 +2,7 @@
 
 Read this in Step 4 when the generator is a lab. Start from the closest template (`cyberlab templates`), change only what the mission needs, then run `cyberlab check <lab>` until it prints `RESULT PASS`.
 
-Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting](#adapting-a-template) · [Isolation policy](#isolation-policy) · [Failures seen before](#failures-seen-before)
+Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting](#adapting-a-template) · [Adding a trace](#adding-a-trace) · [Isolation policy](#isolation-policy) · [Failures seen before](#failures-seen-before)
 
 ## The contract
 
@@ -32,9 +32,18 @@ Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting]
 
 1. Victim: the server image the mission names, pinned to a version tag (or a digest). Mount its config read-only from the lab directory.
 2. Generator: the smallest client that produces the traffic. Standard library on `python:3.12-slim` when possible; otherwise a `build:` directory whose Dockerfile installs pinned packages (the build has network access, the running lab does not).
-3. Modes: one `MODE` value per trace; the same server for attack and benign.
+3. Modes: one `MODE` value per trace (the trace name without `.pcap`); the same server for every trace. An unknown mode must make the generator exit non-zero, never fall back to another mode's traffic.
 4. Capture filter: the protocol's port only, so the trace stays small and on-mission.
 5. `expect.json`: written from the mission before the first run (`references/mission.md`).
+
+## Adding a trace
+
+In a lab that already holds traces (a continued mission):
+
+1. Pick a new trace name, e.g. `attack-slow.pcap`; its mode is `attack-slow`.
+2. Add the mode to the generator: a new branch in the client (`ftp-bruteforce`, `port-scan`, `h2c-rapid-reset`, `protocol-capture/gen.sh`), or a new `payloads/attack-slow.jsonl` (`http-payloads`). Leave the existing branches as they are, so earlier traces can still be regenerated identically.
+3. Change the victim, its config or the capture filter only if every existing trace is still served by the change; otherwise the new need is a different task (a new lab). Say in the hand-off which change was made after which trace.
+4. Add the trace's entry to `expect.json`, then `cyberlab check <lab>` (it checks every mode) and `cyberlab run <lab> attack-slow`.
 
 ## Isolation policy
 

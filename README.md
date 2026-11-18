@@ -10,7 +10,7 @@ You (or a calling agent) say what the lab is for. The skill writes a one-goal mi
 
 ## Features
 
-- **One mission, one goal:** at most two traces and one lab directory per mission. A request with several goals becomes several missions.
+- **One mission, one task:** one lab directory per task (one protocol or attack, for one consumer), holding as many traces as the task needs. Come back later for another variant, threshold or error case and the skill adds traces to the same lab (`cyberlab labs` lists them); an unrelated task gets its own lab.
 - **Minimal labs:** one victim, one generator and one capture sidecar on an internal Docker network.
 - **Expectations first:** `expect.json` holds tshark filters with frame-count bounds per trace. `run` and `craft` refuse a trace that has no expectation, and a trace is done only when its expectations pass.
 - **Isolation checked three times:** an allowlist policy on the compose file before start, the running containers and networks, and the teardown (see [Safety](#safety)).
@@ -83,7 +83,7 @@ The first run builds the template's images. Each `run` prints one `PASS`/`FAIL` 
 
 ## Usage
 
-From an agent, describe the mission in one sentence (as in [Quick start](#quick-start)), or from another skill: "use cyberlab to produce capture.pcap of <protocol> under tcp:port=<n> in <dir>".
+From an agent, describe the mission in one sentence (as in [Quick start](#quick-start)), or from another skill: "use cyberlab to produce capture.pcap of <protocol> under tcp:port=<n> in <dir>". To continue a mission later, name its lab or the task ("add a slow brute-force trace to the FTP lab"): the skill adds traces under new names and leaves the earlier ones alone.
 
 The CLI underneath (`skills/cyberlab/scripts/cyberlab --help`):
 
@@ -91,6 +91,7 @@ The CLI underneath (`skills/cyberlab/scripts/cyberlab --help`):
 |---|---|
 | `cyberlab doctor` / `build` | check docker, compose and the tools image / build the tools image |
 | `cyberlab templates` / `new <dir> --from <t>` | list / copy a lab template |
+| `cyberlab labs [dir]` | list mission labs (goal, scope, traces) to find one to continue |
 | `cyberlab check <lab>` | isolation policy on the resolved compose file |
 | `cyberlab run <lab> <mode>` | policy, up, runtime isolation check, generate, capture (fails on dropped packets), verified teardown, verify `out/<mode>.pcap` |
 | `cyberlab craft <lab> <trace> -- <args>` | synthetic trace with no network, then verify |
@@ -108,7 +109,7 @@ cyberlab craft <lab> capture.pcap -- --parent udp:dport=5684 --payload "40 01 00
 
 ### Output
 
-A lab directory holds `mission.md`, `expect.json`, the lab files and `out/`: the traces, one `<trace>.provenance.json` each, the generator log and `verify.json`.
+A lab directory holds `mission.md` (with a `## Log` of each request), `expect.json`, the lab files and `out/`: the traces, one `<trace>.provenance.json` each, the generator log and `verify.json`.
 
 ## Configuration
 

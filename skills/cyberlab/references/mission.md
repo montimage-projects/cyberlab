@@ -1,8 +1,8 @@
 # Mission brief and expectations
 
-Read this in Steps 1–3. A **mission** is one goal that ends in one or two trace files. Everything in the lab exists for that goal; anything else is left out.
+Read this in Steps 1–3. A **mission** is one task: one protocol or one attack, for one consumer. It has one lab directory and as many trace files as the task needs. Everything in the lab exists for that task; anything else is left out. Later requests on the same task add traces to the same lab.
 
-Contents: [The brief](#the-brief) · [One goal](#one-goal) · [Choose the generator](#choose-the-generator) · [Expectations](#expectations) · [Mission shapes](#mission-shapes) · [Examples](#examples)
+Contents: [The brief](#the-brief) · [One task per lab](#one-task-per-lab) · [Continue or start](#continue-or-start) · [Choose the generator](#choose-the-generator) · [Expectations](#expectations) · [Mission shapes](#mission-shapes) · [Examples](#examples)
 
 ## The brief
 
@@ -10,24 +10,49 @@ Write `<lab>/mission.md` with exactly these lines (`ASSUMED:` in front of each v
 
 ```markdown
 # Mission: <one sentence goal>
+- Scope: <the task boundary later requests are tested against: protocol, attack or behaviour, server; e.g. "FTP brute force against vsftpd/proftpd, for an mmt-security rule">
 - Consumer: <who uses the traces: a person, or a calling skill/agent and what it does with them>
 - Protocol: <protocol, transport and port, e.g. FTP over TCP 21; for a new protocol, its parent selector, e.g. tcp:port=2208>
-- Traces: <file name> — <what must be visible in it>   (one line per trace; at most 2)
+- Traces: <file name> — <what must be visible in it>   (one line per trace; as many as the task needs)
 - Generator: <crafted | lab> — <why, from the table below>
 - Server/client: <images or implementations used, with versions>   (lab only)
 - Destination: <lab directory>; <where the consumer will copy the traces, if it said>
 - Out of scope: <what this mission does not produce>
+
+## Log
+- <YYYY-MM-DD>: <request in one line> → <trace names added or regenerated>
 ```
+
+The `## Log` keeps the history of a reused lab: one dated line per request, added at the end.
 
 When the request comes from another skill or agent, derive every line from that request and do not ask questions: the caller already knows what it needs.
 
 `ASSUMED:` marks a guess about the consumer's **need** (the protocol variant, a threshold, what must be visible). Implementation choices you make to serve a stated need (server image and version, client, ports) are decisions, not assumptions: write them on the `Generator:` and `Server/client:` lines with the reason, and do not mark them `ASSUMED:`. When a person asked and the protocol, the attack variant or the consumer is unknown, ask once in a single message; otherwise mark the value `ASSUMED:`.
 
-## One goal
+## One task per lab
 
-- One mission produces the traces for **one** goal: one attack (attack + benign), or one protocol's normal traffic. A second attack, protocol or tool is a second mission with its own lab directory.
+- One mission serves **one** task: one attack (its attack traces and the benign traffic it must stay silent on), or one protocol's traffic for a parser. Inside that task, add as many traces as the work needs: attack variants, thresholds, error cases, more benign profiles, another message type.
+- A second attack, protocol or unrelated tool is a second mission with its own lab directory.
 - A lab has **one victim, one generator and one capture** sidecar. No IDS, DPI engine, SIEM or dashboard in the lab: the consumer replays the traces with its own tools afterwards.
 - Prefer the template closest to the goal and change as little as possible.
+
+## Continue or start
+
+Before writing a brief, look for a lab to continue:
+
+1. The caller names a lab directory:
+   - no `mission.md` there → start the mission in it;
+   - its `Scope:` covers the request → continue it;
+   - it does not → never write into it: ask once (a person) or return BLOCKED naming the mismatch (a calling skill).
+2. Otherwise run `cyberlab labs` and compare each `Scope:` line with the request.
+   - Same protocol and same task (a new variant, threshold, error case or benign profile of it) → continue that lab.
+   - Different protocol, different attack, or a consumer with an unrelated goal → start a new lab.
+   - Unclear, and a person asked → ask once, naming the candidate lab and its scope. A calling skill never gets a question: if it named no lab, start a new one.
+3. Continuing a lab:
+   - Keep the goal and scope; a lab written before `Scope:` existed gets one now, derived from its goal and `Protocol:` lines (log it). Add the new traces under `Traces:` and a `## Log` line.
+   - Give each new trace a name not yet in `out/` that says what it shows (`attack-slow.pcap`, `benign-anon.pcap`, `capture-errors.pcap`). Reusing a name regenerates that trace and overwrites its file and provenance: do it only when asked.
+   - Do not change what existing modes send or what existing expectations check; add new modes and new entries.
+   - A request that would widen the scope (another server for the same attack, say) belongs to the lab only if the scope line already covers it; otherwise ask (a person) or start a new lab (a caller).
 
 ## Choose the generator
 
@@ -77,14 +102,19 @@ Write `<lab>/expect.json` **before** generating: `run` and `craft` refuse a trac
 | **Attack pair** (detection rule) | `attack.pcap`, `benign.pcap` from the same server | attack: the attack messages with a minimum count, both endpoints; benign: the protocol present with both endpoints, the attack marker `max: 0` |
 | **Protocol capture** (parser/plugin) | `capture.pcap` | the protocol's payload frames under its parent, `endpoints: 2` (both directions), each message type the consumer named, `max_frames` 10000 |
 | **Variant set** (one attack, several encodings) | `attack.pcap` holding every variant, `benign.pcap` | one expectation per variant marker |
+| **Growing set** (a reused lab) | the traces above plus one per later request: `attack-<variant>.pcap`, `benign-<profile>.pcap`, `capture-<case>.pcap` | each new trace gets its own entry; existing entries stay as they are |
+
+A variant set fits one trace when the consumer wants all variants at once; split them into one trace per variant when the consumer tests them separately.
 
 ## Examples
 
 **A rule generator needs evidence for an FTP brute-force rule.** The caller states: FTP, failed logins in a time window, the rule must stay silent on a normal login.
 
-- Mission: "Produce an attack/benign pair of FTP logins against a real FTP server: ≥5 failed logins in the attack, one successful login in the benign".
+- Mission: "Produce an attack/benign pair of FTP logins against a real FTP server: ≥5 failed logins in the attack, one successful login in the benign". Scope: "FTP brute force against a real FTP server, for an mmt-security rule".
 - Generator: lab (a time window needs real server delays).
 - Template: `ftp-bruteforce`; expectations as in the JSON above.
+- A week later the caller wants a slow brute force (one attempt every 20 s) to test the rule's window. Same scope → same lab: add `attack-slow.pcap` to the brief, an `attack-slow` mode to the generator, its expectations, and a `## Log` line; `attack.pcap` and `benign.pcap` stay untouched.
+- The caller then asks for an SSH brute force. Different protocol → a new mission and lab.
 
 **A protocol-plugin generator needs a capture of OCI-P on TCP 2208.** The caller states: the parent selector, the message types to exercise, that no public capture exists.
 

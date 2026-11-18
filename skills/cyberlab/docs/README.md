@@ -11,7 +11,7 @@
 
 ## Highlights
 
-- One mission, one goal: an attack/benign pcap pair for a detection rule, or a capture of a protocol for a parser.
+- One mission, one task: attack and benign pcaps for a detection rule, or captures of a protocol for a parser, with as many traces as the task needs. Later work on the same task reuses the lab (`cyberlab labs` finds it); an unrelated task gets a new one.
 - Minimal labs: one victim, one generator, one capture sidecar; no IDS or DPI inside — consumers replay the traces with their own tools.
 - Safety checked three times: an allowlist policy on the compose file (internal network, no host address on the bridge), the running containers and network, and the teardown.
 - Expectations first: tshark filters with frame-count bounds in `expect.json`; a trace is done only when they pass.
@@ -50,7 +50,7 @@ graph TD
 
 | Path | Description |
 |---|---|
-| `scripts/cyberlab` | CLI: doctor, build, templates, new, check, run, craft, verify, down, status, nuke |
+| `scripts/cyberlab` | CLI: doctor, build, templates, labs, new, check, run, craft, verify, down, status, nuke |
 | `scripts/lab_policy.py` | isolation policy for a resolved compose file |
 | `scripts/verify.py` | expectations check (tshark filters, frame counts, endpoints) |
 | `scripts/craft_pcap.py` | synthetic traces: payloads behind real Ethernet/IP/TCP/UDP headers |
