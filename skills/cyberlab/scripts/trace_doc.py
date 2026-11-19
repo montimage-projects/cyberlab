@@ -53,7 +53,8 @@ def script_reads(lab, command, generator):
     if not m:
         return None
     try:
-        text = open(os.path.join(lab, m.group(1).strip("'")), errors="replace").read()
+        with open(os.path.join(lab, m.group(1).strip("'")), errors="replace") as f:
+            text = f.read()
     except OSError:
         return None
     return {n for n in os.listdir(os.path.join(lab, "out")) if n.endswith(".pcap") and n in text}
@@ -534,7 +535,7 @@ def who_is_who(trace, prov, mech, mission, rows, lab=""):
     origin = prov.get("origin", "")
     crafted = origin.startswith("crafted")
     derived = derived_sources(prov, lab) if crafted else []
-    gen = prov.get("generator", "").split()
+    gen = str(prov.get("generator") or "").split()
     script = gen[1] if len(gen) > 1 and gen[0] == "python3" else "the script"
     stats = collections.OrderedDict()
     pairs = collections.Counter()
@@ -586,8 +587,8 @@ def who_is_who(trace, prov, mech, mission, rows, lab=""):
             if len(versions) != len(set(versions)):
                 why = f"MAC {target} sent IP frames from several addresses ({', '.join(ips)})"
             elif shared:
-                why = (f"{', '.join(ips)}, the address{'es' if len(ips) > 1 else ''} MAC {target} sent from, "
-                       f"also came from MAC {', '.join(shared)}")
+                both = [x for x in ips if ip_macs[x] - {low}]
+                why = (f"{', '.join(both)}, which MAC {target} sent from, also came from MAC {', '.join(shared)}")
             else:
                 keys = [x for x in ips if x in stats]
         if not keys:

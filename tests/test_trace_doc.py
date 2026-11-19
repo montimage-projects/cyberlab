@@ -106,6 +106,17 @@ class MacRolesTarget(unittest.TestCase):
         who = self.who(frames, ("Victim", VIC_MAC))
         self.assertEqual([u[:2] for u in who["unresolved"]], [("Victim", VIC_MAC)])
         self.assertNotIn("Victim", [e["role"] for e in who["rows"]])
+        with tempfile.TemporaryDirectory() as lab:
+            os.mkdir(os.path.join(lab, "out"))
+            w = trace_doc.doc_warnings(lab, "attack.pcap", mission(), {"found": False}, {}, who)
+        self.assertIn(f"`Roles: Victim = {VIC_MAC}` in mechanism.md matches no address in the trace: "
+                      f"{VIC_IP}, which MAC {VIC_MAC} sent from, also came from MAC {ATK_MAC}; "
+                      "name the host by its IP address", w)
+
+    def test_mac_that_sent_ip_only_from_unspecified_address_warns_plainly(self):
+        frames = [icmp(GW_MAC, BCAST, "0.0.0.0", "255.255.255.255")] + SPOOF
+        who = self.who(frames, ("Gateway", GW_MAC))
+        self.assertEqual(who["unresolved"], [("Gateway", GW_MAC, "")])
 
     def test_dual_stack_host_gets_the_role_on_both_addresses(self):
         frames = SPOOF + [(VIC_MAC, ATK_MAC, "fd00::1", "fd00::2", "ICMPv6", "Echo (ping) request")]
@@ -151,6 +162,7 @@ class DerivedTrace(unittest.TestCase):
         self.assertNotIn("no host or network was involved", text)
         self.assertNotIn("no network used", text)
         self.assertNotIn("crafted address", text)
+        self.assertIn('subgraph net["derived from benign.pcap by derive.py: addresses from there"]', text)
         self.assertEqual(role_of(who, GW_IP), "Other (from benign.pcap or added by derive.py)")
 
     def test_source_without_provenance_is_not_called_a_lab_capture(self):
