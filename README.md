@@ -33,7 +33,7 @@ npx skills add https://github.com/montimage-projects/cyberlab --skill cyberlab
 /cyberlab traces for an FTP brute-force rule: 5+ failed logins, and a normal login as benign
 ```
 
-**What you get back:** a lab directory (under `~/.cache/cyberlab/` unless you name one) whose `out/` holds the verified traces, e.g. `attack.pcap` and `benign.pcap`, each with a `.md` document and a `.provenance.json`, plus `verify.json`. The agent ends with a short report: the traces, what was checked, and what is still uncertain.
+**What you get back:** a lab directory where you choose: the agent asks, and defaults to the directory you invoked it from. Its `out/` holds the verified traces, e.g. `attack.pcap` and `benign.pcap`, each with a `.md` document and a `.provenance.json`, plus `verify.json`. Each document opens with who is who (the attacker's and the victim's IP addresses as captured) and draws the exchange as Mermaid diagrams. The agent ends with a short report: who attacked whom, the traces, what was checked, and what is still uncertain.
 
 **4. Replay the traces with your own detector**, e.g. `snort -r out/attack.pcap` or `suricata -r out/attack.pcap`. The rule should fire on `attack.pcap` and stay silent on `benign.pcap`.
 
@@ -67,15 +67,16 @@ No IDS, DPI or SIEM goes into the lab. The consumer replays the traces with its 
 
 ```mermaid
 graph TD
-    A["Preflight: docker + tools image"] --> B["Mission brief: one goal, traces, consumer"]
+    A["Preflight: docker + tools image, note the invocation directory"] --> B["Mission brief: one goal, traces, consumer; ask where to store the output"]
     B --> C["Smallest generator: lab or crafted"]
     C --> D["expect.json: what each trace must show"]
-    D --> E["Build lab from template + policy check"]
-    E --> F["run / craft: capture, teardown, verify"]
-    F --> G["Hand-off report: traces, evidence, uncertainty"]
+    D --> E["Build lab from template + policy check; mechanism.md with diagrams"]
+    E --> F["run / craft: capture, record each service's address, teardown, verify"]
+    F --> G["Trace documents: who is who first, then diagrams, checks, reproduction"]
+    G --> H["Hand-off report: who, traces, lab, evidence, uncertainty"]
 ```
 
-The agent follows these steps in [`skills/cyberlab/SKILL.md`](skills/cyberlab/SKILL.md) and ends with a hand-off report (Result, Traces, Evidence, Uncertainty, Decision).
+The agent follows these steps in [`skills/cyberlab/SKILL.md`](skills/cyberlab/SKILL.md) and ends with a hand-off report (Result, Who, Traces, Lab, Evidence, Uncertainty, Decision).
 
 ## Lab topology
 
@@ -144,7 +145,10 @@ Crafted traces skip the lab network entirely: `cyberlab craft` runs `craft_pcap.
 | Expectations first | Counts, time windows, distinct values and spacing checked before a trace counts |
 | Isolation checked three times | Compose policy before start, running containers, and teardown |
 | Crafted traces | Real Ethernet/IP/TCP/UDP headers around your payload, labelled synthetic |
-| Attack mechanism | `mechanism.md` per lab, with checked links to CVE, RFC, ATT&CK |
+| Attack mechanism | `mechanism.md` per lab: who is who, sequence diagrams, checked links to CVE, RFC, ATT&CK |
+| Who is who | Each trace document opens with the attacker, the victim and every other address, recorded from Docker while the lab ran |
+| Diagrams first | Mermaid diagrams of each trace: hosts, the exchange, traffic over time, protocol mix |
+| Output where you work | The agent asks where to store the lab; the default is the directory you invoked it from |
 | Provenance and reproduction | `<trace>.provenance.json` and `<trace>.md` for every trace |
 | Host needs only Docker | tcpdump, tshark and Python run in the tools image |
 
@@ -188,8 +192,10 @@ You (or a calling agent) say what the lab is for. The skill writes a one-goal mi
 - **Expectations first:** `expect.json` holds tshark filters with bounds per trace: frame or message counts, the most matches in a time window (`window`), distinct field values (`distinct`) and spacing (`gap_min`/`gap_max`), so every claim in the brief, rule thresholds included, is checked. `run` and `craft` refuse a trace that has no expectation, and a trace is done only when its expectations pass.
 - **Isolation checked three times:** an allowlist policy on the compose file before start, the running containers and networks, and the teardown (see [Safety](#safety)).
 - **Crafted traces when no implementation exists:** payloads behind real Ethernet/IP/TCP/UDP headers, written with no network and labelled synthetic.
-- **Attack mechanism:** each lab has a `mechanism.md` with how the attack (or protocol) works, what each trace shows of it, and links to the CVE, RFC, MITRE ATT&CK or vendor write-up. Every template ships one.
-- **Provenance and reproduction:** each trace gets an `out/<trace>.provenance.json` (origin, frames, sha256, the exact command, images with registry digests, the sha256 of every lab file) and an `out/<trace>.md` that explains what the trace contains, how the attack works, how it was generated and how someone else reproduces it.
+- **Attack mechanism:** each lab has a `mechanism.md` that opens with who is who (attacker, victim, any other host), then shows how the attack (or protocol) works and what each trace holds as Mermaid sequence diagrams with short text, and links to the CVE, RFC, MITRE ATT&CK or vendor write-up. Every template ships one.
+- **Who is who, with addresses:** `cyberlab run` records the address Docker gave each lab service while the lab runs, so each trace document can say which IP address is the attacker and which the victim before any detail. Crafted traces name their addresses in `mechanism.md`.
+- **Provenance and reproduction:** each trace gets an `out/<trace>.provenance.json` (origin, frames, sha256, the exact command, images with registry digests, the service addresses, the sha256 of every lab file) and an `out/<trace>.md` that shows who is who, the exchange as diagrams, how the attack works, how it was generated and how someone else reproduces it.
+- **Output where you work:** the agent asks where to store the lab and its traces; with no answer (or when another skill calls it) the lab goes in the directory it was invoked from.
 - **Host needs only Docker:** every check runs in a small tools image (tcpdump, tshark, Python).
 
 </details>
@@ -236,7 +242,7 @@ The CLI underneath (`skills/cyberlab/scripts/cyberlab --help`):
 |---|---|
 | `cyberlab doctor` / `build` | check docker, compose and the tools image / build the tools image |
 | `cyberlab templates` / `new <dir> --from <t>` | list / copy a lab template |
-| `cyberlab labs [dir]` | list mission labs (goal, scope, traces) to find one to continue |
+| `cyberlab labs [dir]...` | list mission labs (goal, scope, traces) to find one to continue; default: the current directory and `~/.cache/cyberlab` (labs made before 1.3.0) |
 | `cyberlab check <lab>` | isolation policy on the resolved compose file |
 | `cyberlab run <lab> <mode>` | policy, up, runtime isolation check, generate, capture (fails on dropped packets), verified teardown, verify `out/<mode>.pcap` |
 | `cyberlab craft <lab> <trace> -- <args>` | synthetic trace with no network, then verify |
@@ -260,12 +266,22 @@ cyberlab craft <lab> capture.pcap -- --parent udp:dport=5684 --payload "40 01 00
 
 A lab directory holds `mission.md` (with a `## Log` of each request), `mechanism.md`, `expect.json`, the lab files and `out/`: the traces, one `<trace>.provenance.json` and one `<trace>.md` each, the generator log and `verify.json`.
 
-`out/<trace>.provenance.json` records the origin, frames, sha256, the exact command, images with registry digests, and the sha256 of every lab file.
+`out/<trace>.provenance.json` records the origin, frames, sha256, the exact command, images with registry digests, the address of each lab service during the run, and the sha256 of every lab file.
 
-`<trace>.md` is the trace's document, written from the brief, `mechanism.md`, the expectations, the verification result, the provenance and tshark summaries of the trace:
+`<trace>.md` is the trace's document, written from the brief, `mechanism.md`, the expectations, the verification result, the provenance and tshark summaries of the trace. It explains with Mermaid diagrams first and text second:
 
-- **What it contains:** the brief's description, the protocol hierarchy, the conversations and the first 40 packets.
-- **Mechanism:** how the attack or protocol works, what this trace shows of it, and the references, from `mechanism.md`. Every template ships one.
+```mermaid
+flowchart LR
+    W["Who is who<br/>attacker and victim addresses"] --> X["What it contains<br/>exchange, traffic, protocols"]
+    X --> M["Mechanism<br/>from mechanism.md"]
+    M --> C["What was checked"]
+    C --> G["How it was generated"]
+    G --> R["How to reproduce"]
+```
+
+- **Who is who:** every address in the trace with its role (attacker or client, victim or server, other), its MAC, lab service and image, and the frames it sent and received, as a table and a flowchart. Lab captures take the addresses Docker gave each service during the run; crafted traces take them from `craft_pcap.py` or a `Roles:` line in `mechanism.md`. When neither exists, the document only says which host spoke first, and `doc` warns.
+- **What it contains:** the brief's description; a sequence diagram of the first 30 frames that carry the exchange (payloads, non-TCP frames, connection openings and resets; in a trace without payloads, all but pure ACKs), a chart of frames over time and a pie of protocols; the protocol hierarchy, conversations and first 40 packets in a folded block.
+- **Mechanism:** who is who, how the attack or protocol works, what this trace shows of it (with its diagrams), and the references, from `mechanism.md`. Every template ships one.
 - **What was checked:** the trace's expectations and the last verification result.
 - **How it was generated:** the command, `MODE`/`PCAP`, the resolved lab services, image IDs, registry digests and Dockerfile base images, tool and Docker versions, and the sha256 of every lab file (with a flag on any file changed since).
 - **How to reproduce:** the steps, and what "the same" means. A trace crafted with `craft_pcap.py` reproduces byte for byte (same sha256). A lab capture reproduces as an equivalent trace that passes the same expectations but is never the same file: timestamps, TCP sequence numbers, client ports and container addresses change on every run.
@@ -281,7 +297,7 @@ To reproduce a trace, share the lab directory with it: the document lists the fi
 |---|---|---|
 | `CYBERLAB_TOOLS` | `cyberlab/tools:local` | the CLI: tools image for checks, capture and crafting |
 | `CYBERLAB_TIMEOUT` | `300` | the CLI: seconds `run` waits for the generator before tearing the lab down |
-| `CYBERLAB_HOME` | `$HOME/.cache/cyberlab` | the agent (SKILL.md Step 1): parent of new lab directories when the caller names none; `cyberlab labs`: directory it lists when given none |
+| `CYBERLAB_HOME` | `$HOME/.cache/cyberlab` | `cyberlab labs`: also lists the labs there when given no directory. Versions before 1.3.0 created labs there; new labs go where you say, or in the directory the skill was invoked from |
 
 </details>
 

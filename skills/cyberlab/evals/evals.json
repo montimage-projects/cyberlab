@@ -4,8 +4,8 @@
     {
       "id": 1,
       "kind": "happy-path",
-      "prompt": "I'm writing an mmt-security rule for FTP brute force. Set up a lab and give me an attack pcap with at least 5 failed logins and a benign pcap with one normal login, from the same FTP server.",
-      "expected_output": "One mission (attack pair), lab generator from the ftp-bruteforce template, expect.json written before generation, attack.pcap and benign.pcap with RESULT PASS, clean teardown, hand-off report.",
+      "prompt": "I'm writing an mmt-security rule for FTP brute force. Set up a lab in ./ftp-rule and give me an attack pcap with at least 5 failed logins and a benign pcap with one normal login, from the same FTP server.",
+      "expected_output": "One mission (attack pair) in ./ftp-rule (named, so no location question), lab generator from the ftp-bruteforce template, expect.json written before generation, attack.pcap and benign.pcap with RESULT PASS, documents that open with who is who and carry Mermaid diagrams, clean teardown, hand-off report with a Who line.",
       "files": [],
       "expectations": [
         "The run wrote mission.md with exactly one goal and a Scope line, and expect.json, before the first `cyberlab run`",
@@ -15,7 +15,12 @@
         "`cyberlab status <lab>` printed `no cyberlab lab resources` at the end",
         "out/attack.md and out/benign.md exist, each with a 'How to reproduce' section naming the `cyberlab run` command for its mode",
         "The lab's mechanism.md explains FTP password guessing, has an attack.pcap and a benign.pcap section, and lists references (e.g. RFC 959, MITRE ATT&CK T1110.001), and out/attack.md shows it under Mechanism",
-        "Each `## <trace>.pcap` section of mechanism.md states the expected verdict of the brute-force rule (fires on attack.pcap, stays silent on benign.pcap), and the final `cyberlab doc` printed no `WARN doc` line"
+        "Each `## <trace>.pcap` section of mechanism.md states the expected verdict of the brute-force rule (fires on attack.pcap, stays silent on benign.pcap), and the final `cyberlab doc` printed no `WARN doc` line",
+        "The agent asked no question about where to store the output (the request named ./ftp-rule), and the lab directory is ./ftp-rule",
+        "Each `cyberlab run` printed a `NOTE address` line, and out/attack.md has a `## Who is who` section before `## What it contains` that names the attacker's and the victim's IP addresses with `Known from: Docker, while the lab ran`",
+        "mechanism.md opens with a who-is-who line by lab service (no IP address of a lab trace) and has a ```mermaid sequenceDiagram in its general text and in each `## <trace>.pcap` section",
+        "The hand-off report has a `Who:` line naming the attacker and victim addresses, placed before the `Traces:` line",
+        "The hand-off report ends with a `Decision:` line (the approval needed, or `No approval needed.`), and its `Uncertainty:` line lists ASSUMED values and unconfirmed verdicts apart from what verify checked"
       ]
     },
     {
@@ -34,7 +39,7 @@
     {
       "id": 3,
       "kind": "happy-path",
-      "prompt": "I need a trace of a proprietary telemetry protocol on UDP 5684 for a parser. No implementation exists; here are the messages: client sends 12 01 00 0c 00 00 00 2a de ad be ef, server answers 10 02 00 08 00 00 00 2a.",
+      "prompt": "I need a trace of a proprietary telemetry protocol on UDP 5684 for a parser. No implementation exists; here are the messages: client sends 12 01 00 0c 00 00 00 2a de ad be ef, server answers 10 02 00 08 00 00 00 2a. Put it in ./telemetry-trace.",
       "expected_output": "Crafted generator chosen with the reason, payloads.txt from the given bytes, `cyberlab craft` with --parent udp:dport=5684, RESULT PASS, report says synthetic.",
       "files": [],
       "expectations": [
@@ -42,13 +47,14 @@
         "The run used `cyberlab craft` (no docker compose lab was started)",
         "expect.json checks both directions on udp.port == 5684",
         "The report labels the trace `crafted (synthetic)` and its status is not stated as a lab capture",
-        "out/capture.md says a rerun of the same craft command gives the same sha256"
+        "out/capture.md says a rerun of the same craft command gives the same sha256",
+        "out/capture.md's Who is who names the client 10.0.0.1 and the server 10.0.0.2 with `Known from: craft_pcap.py's fixed addresses`"
       ]
     },
     {
       "id": 4,
       "kind": "edge",
-      "prompt": "Set up a lab with Suricata, Zeek and an ELK stack, and generate HTTP/2 rapid reset and Log4Shell attacks so I can test everything at once.",
+      "prompt": "Set up a lab with Suricata, Zeek and an ELK stack, and generate HTTP/2 rapid reset and Log4Shell attacks so I can test everything at once. Put the labs under ./labs.",
       "expected_output": "The agent splits the request into two missions (rapid reset; Log4Shell), declines to install Suricata/Zeek/ELK in the lab (out of scope: the caller replays traces with its own tools), and builds minimal labs.",
       "files": [],
       "expectations": [
@@ -80,7 +86,7 @@
       "files": [],
       "expectations": [
         "The second request asked no clarifying question (the caller is a skill)",
-        "The second request created a new lab directory whose mission.md Scope names SSH",
+        "The second request created a new lab directory under the invocation directory (not ~/.cache/cyberlab) whose mission.md Scope names SSH",
         "No file in ./ftp-bf changed during the second request"
       ]
     },
@@ -98,7 +104,7 @@
     {
       "id": 8,
       "kind": "edge",
-      "prompt": "Use this compose file for the lab, it publishes nginx on 8080 so I can watch it from my browser.",
+      "prompt": "Use this compose file for the lab in ./nginx-watch, it publishes nginx on 8080 so I can watch it from my browser.",
       "expected_output": "`cyberlab check` fails on the published port; the agent removes ports: and explains that labs never publish ports.",
       "files": [],
       "expectations": [
@@ -137,7 +143,34 @@
         "The brief's Traces lines name the rule's condition (>20 A-ASSOCIATE-RQ in 5 s) and the expected verdict for each trace",
         "expect.json has a `window: 5` expectation with `min` >= 21 for the attack trace and a `window: 5` expectation with `max` <= 20 for the benign trace",
         "If the first attack run peaks below 21 in 5 s, the agent fixes the generator's pacing and reruns rather than editing the expectation or the description",
-        "The hand-off's Uncertainty line says the verdicts were not confirmed by running the detector"
+        "The hand-off's Uncertainty line says the verdicts were not confirmed by running the detector",
+        "No question was asked about the location: the lab directory is `<invocation directory>/<YYYYMMDD-HHMMSS>-<slug>`, not under ~/.cache/cyberlab, and the brief's `Destination:` line says it is the default"
+      ]
+    },
+    {
+      "id": 12,
+      "kind": "happy-path",
+      "prompt": "Two turns. First: \"Give me attack and benign pcaps for an FTP brute-force rule: at least 5 failed logins in the attack, one normal login in the benign.\" When the agent asks where to store the output, second: \"Use the default.\"",
+      "expected_output": "The first reply asks once where to store the output, offering `<invocation directory>/<YYYYMMDD-HHMMSS>-<slug>`, and creates nothing; after \"Use the default.\" the lab is created there and the run proceeds as eval 1.",
+      "files": [],
+      "expectations": [
+        "The first reply asked where to store the output in a single message and named the default under the invocation directory",
+        "No lab directory, mission.md or container existed before the second turn",
+        "After the second turn the lab directory is `<invocation directory>/<YYYYMMDD-HHMMSS>-<slug>`; nothing was written under ~/.cache/cyberlab",
+        "The hand-off report's `Lab:` line names that directory and says it is the default"
+      ]
+    },
+    {
+      "id": 13,
+      "kind": "edge",
+      "prompt": "Called by a rule-generator skill: produce a crafted (synthetic) ARP spoofing trace attack-arpspoof.pcap in ./arp-lab. Host 10.0.0.1 (MAC 02:00:0a:00:00:01) asks who has the gateway 10.0.0.254, the real gateway (MAC 02:00:0a:00:00:fe) answers, then an attacker MAC 02:ba:d0:ba:d0:01 sends three forged replies for 10.0.0.254, one second apart.",
+      "expected_output": "A --script craft whose mechanism.md section opens with a Roles line naming the attacker, victim and gateway by MAC; the trace document's Who is who takes the roles from it, with no WARN doc line about inferred roles.",
+      "files": [],
+      "expectations": [
+        "The agent asked no question (the caller is a skill) and used ./arp-lab",
+        "mechanism.md's `## attack-arpspoof.pcap` section opens with a `Roles:` line naming the attacker (02:ba:d0:ba:d0:01), the victim (02:00:0a:00:00:01) and the gateway (02:00:0a:00:00:fe), and holds a ```mermaid diagram of the three forged replies",
+        "out/attack-arpspoof.md's Who is who lists the attacker as 02:ba:d0:ba:d0:01 with `Known from: Roles: line in mechanism.md`, not the host that asked",
+        "The final `cyberlab doc` printed no `WARN doc` line for attack-arpspoof.pcap"
       ]
     }
   ]

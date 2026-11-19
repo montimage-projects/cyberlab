@@ -2,7 +2,7 @@
 
 Read this in Steps 1–3. A **mission** is one task: one protocol or one attack, for one consumer. It has one lab directory and as many trace files as the task needs. Everything in the lab exists for that task; anything else is left out. Later requests on the same task add traces to the same lab.
 
-Contents: [The brief](#the-brief) · [One task per lab](#one-task-per-lab) · [Continue or start](#continue-or-start) · [Choose the generator](#choose-the-generator) · [Expectations](#expectations) · [Mechanism](#mechanism) · [Mission shapes](#mission-shapes) · [Examples](#examples)
+Contents: [The brief](#the-brief) · [One task per lab](#one-task-per-lab) · [Output location](#output-location) · [Continue or start](#continue-or-start) · [Choose the generator](#choose-the-generator) · [Expectations](#expectations) · [Mechanism](#mechanism) · [Mermaid diagrams](#mermaid-diagrams) · [Mission shapes](#mission-shapes) · [Examples](#examples)
 
 ## The brief
 
@@ -16,7 +16,7 @@ Write `<lab>/mission.md` with exactly these lines (`ASSUMED:` in front of each v
 - Traces: <file name> — <what must be visible in it>; [rule <N>: <its condition and threshold, e.g. >20 A-ASSOCIATE-RQ in 5 s>; fires | stays silent]   (one line per trace; as many as the task needs; the rule part when the consumer named a rule)
 - Generator: <crafted | lab> — <why, from the table below>
 - Server/client: <images or implementations used, with versions>   (lab only)
-- Destination: <lab directory>; <where the consumer will copy the traces, if it said>
+- Destination: <lab directory> (<named by the requester | default: the invocation directory>); <where the consumer will copy the traces, if it said>
 - Out of scope: <what this mission does not produce>
 
 ## Log
@@ -36,15 +36,31 @@ When the request comes from another skill or agent, derive every line from that 
 - A lab has **one victim, one generator and one capture** sidecar. No IDS, DPI engine, SIEM or dashboard in the lab: the consumer replays the traces with its own tools afterwards.
 - Prefer the template closest to the goal and change as little as possible.
 
+## Output location
+
+The lab directory holds everything the mission produces (`mission.md`, `mechanism.md`, the lab files, `out/`), so its location is where the output lands.
+
+1. **Invocation directory:** the absolute path of the shell's working directory at Step 0 (`pwd`), recorded before any `cd`. It is the default location.
+2. **Named:** the requester names a directory (or a lab) in the request → use it; ask nothing about the location.
+3. **Ask:** a person asked for a new lab (no lab of *Continue or start* covers the request) and named no location → ask where to store the output, in the same single message as any other Step 1 question, offering the default: `<invocation directory>/<YYYYMMDD-HHMMSS>-<slug>`. Write nothing before the reply. A continued lab stays where it is: no question.
+4. **Default, no question:** a calling skill or agent, or nobody to answer (a subagent, unattended or test run) → the default lab directory, `<invocation directory>/<YYYYMMDD-HHMMSS>-<slug>`. A person who replies without naming a location (or says "default", "here") gets the path offered in the question, timestamp included.
+5. **Resolve a named location:**
+   - it holds `mission.md` → it is a lab: apply *Continue or start* below;
+   - it does not exist, or is empty → it becomes the lab directory;
+   - otherwise (a project directory) → the lab goes in `<location>/<YYYYMMDD-HHMMSS>-<slug>`.
+6. Write the result on the brief's `Destination:` line and name the lab directory in the hand-off report: the requester must be able to find the output.
+
+`CYBERLAB_HOME` no longer chooses where new labs go: versions before 1.3.0 put them under `${CYBERLAB_HOME:-~/.cache/cyberlab}`, and `cyberlab labs` still lists that directory so those labs can be continued.
+
 ## Continue or start
 
 Before writing a brief, look for a lab to continue:
 
 1. The caller names a lab directory:
-   - no `mission.md` there → start the mission in it;
+   - no `mission.md` there → start the mission there (*Output location*, step 5);
    - its `Scope:` covers the request → continue it;
    - it does not → never write into it: ask once (a person) or return BLOCKED naming the mismatch (a calling skill).
-2. Otherwise run `cyberlab labs` and compare each `Scope:` line with the request.
+2. Otherwise run `cd <invocation directory> && cyberlab labs` (it lists the labs there and in the pre-1.3.0 location) and compare each `Scope:` line with the request.
    - Same protocol and same task (a new variant, threshold, error case or benign profile of it) → continue that lab.
    - Different protocol, different attack, or a consumer with an unrelated goal → start a new lab.
    - Unclear, and a person asked → ask once, naming the candidate lab and its scope. A calling skill never gets a question: if it named no lab, start a new one.
@@ -114,24 +130,41 @@ Write `<lab>/expect.json` **before** generating: `run` and `craft` refuse a trac
 
 ## Mechanism
 
-Write `<lab>/mechanism.md` in Step 4, and correct it in Step 6 against what each trace really holds. Every trace document (`out/<trace>.md`) shows it under **Mechanism**, so a reader learns what the attack is without leaving the trace. Each template ships one to adapt. `cyberlab doc` prints a `WARN doc` line when the file, a trace's section or the references are missing.
+Write `<lab>/mechanism.md` in Step 4, and correct it in Step 6 against what each trace really holds. Every trace document (`out/<trace>.md`) shows it under **Mechanism**, so a reader learns what the attack is without leaving the trace. Each template ships one to adapt. Show before telling: a diagram carries the exchange, the text adds only what the diagram cannot (why it works, what a detector keys on). `cyberlab doc` prints a `WARN doc` line when the file, a trace's section, a diagram or the references are missing.
 
-```markdown
+````markdown
 # Mechanism: <attack or protocol name, with its CVE if it has one>
+
+**Who is who:** the attacker (or client) is <the lab's `generator` service | an address, crafted traces>, <what it runs>; the victim (or server) is <the `victim` service | an address>, <what it runs>; <any other host and its part>. <Lab: "Docker gives them new addresses on every run: each trace's document opens with them.">
+
+```mermaid
+sequenceDiagram
+  <the attack or protocol exchange between the roles above: requests, replies, loops with their counts, notes on timing>
+```
 
 <How it works: what the attacker sends, which protocol rule or weakness it abuses, and what that leads to.
 What a detector keys on: the messages, fields, counts or timing that set it apart from normal traffic; for a rule the caller named, what that rule matches (read its source when you have it) and its thresholds.
 How this lab produces it: server, client, any change from the real-world attack (e.g. cleartext instead of TLS).>
 
 ## <trace>.pcap
-<what this trace holds: the variant, the counts, the pacing; the rule(s) it targets and the expected verdict (fires / stays silent); for a benign trace, what normal use it shows and why it must not trigger the rule; whether it is a real capture or synthetic>
+Roles: <role> = <lab service or address>, ...   (only when needed: see below)
+
+```mermaid
+sequenceDiagram
+  <what this trace holds: the variant, with the counts and pacing it was captured with>
+```
+
+<what the diagram cannot show: the rule(s) it targets and the expected verdict (fires / stays silent); for a benign trace, why it must not trigger the rule; whether it is a real capture or synthetic>
 
 ## References
 - [<title>](<url>) — <what this source supports>
-```
+````
 
-- A protocol capture describes the protocol instead: its messages and fields, and the cases the trace covers.
-- One `## <trace>.pcap` section per trace. A continued lab adds sections and leaves the others unchanged.
+- **Who is who comes first**, before any explanation: the reader learns which party is the attacker and which the victim before the details. The trace document then opens with the same parties and their actual addresses, MACs and frame counts, in its own *Who is who* section.
+- **Never write a lab trace's IP address into `mechanism.md`**: Docker assigns addresses on each run, so the text would go stale. `cyberlab run` records them; the trace document shows them.
+- **`Roles:` line**, the first line of a trace section, names who is who where the trace document cannot know it: a `--script` crafted trace (`Roles: attacker = 10.9.0.7, victim = 10.9.0.2, zombie = 10.9.0.5`), or a lab host other than `generator` and `victim`. Targets are lab service names or addresses as they appear in the trace (IPv4, IPv6, MAC). Lab captures need none: the generator is the attacker in attack traces and the client otherwise, the victim service the victim or server. `doc` warns when roles had to be inferred, or a `Roles:` target is not in the trace.
+- A protocol capture describes the protocol instead: its messages and fields, and the cases the trace covers. Its parties are client and server.
+- One `## <trace>.pcap` section per trace, each with its own diagram. A continued lab adds sections and leaves the others unchanged.
 - References: link the primary sources first. That means the standard (RFC or 3GPP spec), the vulnerability record (NVD CVE page), the technique (MITRE ATT&CK, CWE, CAPEC), and the vendor or researcher write-up. For a detection rule, add the rule's own documentation if the caller gave it.
 - Cite only what you know is real. When web access exists, open each link and check its content, not only its status. A 200 response can be a bot-check or home page, and PDFs have no title:
   - HTML page: its title or text names what you cite;
@@ -141,6 +174,18 @@ How this lab produces it: server, client, any change from the real-world attack 
 
   Drop a link that fails these checks. Without web access, put `(link not checked)` after each link. Never invent a URL, a CVE number or a technique ID. When there is no public source, write `No public reference found.` under `## References`.
 - Describe the mechanism, not a working exploit. Give the bytes and behaviour a detector needs, and nothing more (`references/safety.md`).
+
+## Mermaid diagrams
+
+Every document a mission produces explains with diagrams first. `mechanism.md` carries the ones you write; `cyberlab doc` draws the rest into each `out/<trace>.md` from the trace itself: who is who (a flowchart of every address and the frames between them), the exchange (a sequence diagram of the first frames), traffic over time and the protocol mix.
+
+- **Kinds:** `sequenceDiagram` for an exchange (the default for a mechanism), `flowchart LR` for a topology or a decision. Other kinds render in fewer viewers.
+- **Participants by role**, matching *Who is who*: `participant A as Attacker (generator)`, `participant V as Victim (ProFTPD)`. Never an IP address of a lab trace.
+- **Counts and timing in the diagram:** `loop 8 guesses, each on its own TCP connection`, `Note over A,V: one attempt every 20 s`, `alt port closed … else port open … end`. They must match what the trace holds (Step 6).
+- **Small:** about 15 messages at most; group repetition in a `loop`.
+- **Syntax that breaks rendering** (each one checked with mermaid-cli): a `;` in a sequence message ends the statement, so rephrase or write `#59;`; every `loop`, `alt`, `opt`, `par`, `critical`, `break`, `rect` needs its own `end` line, and a stray `end` line breaks the diagram; a flowchart label with parentheses needs quotes, `a["text (note)"]`. `doc` warns on these, but its check is no parser: keep to plain words.
+- **No payloads:** name the marker (`Log4Shell lookup in User-Agent`), never paste an exploit string (`references/safety.md`).
+- **Viewers without Mermaid** (a terminal, a plain editor) show the diagram source. Keep the facts a reader needs (counts, verdicts, who is who) in the text and tables too, and never only in a diagram. The hand-off report is plain text: it names the documents that hold the diagrams.
 
 ## Mission shapes
 

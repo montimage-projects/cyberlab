@@ -4,6 +4,20 @@
 
 ### Features
 
+- Ask where to store the output. For a new lab, a person who names no location is asked in the agent's single Step 1 message, with the default offered: `<invocation directory>/<YYYYMMDD-HHMMSS>-<slug>`, in the directory the skill was invoked from. A calling skill, or a run with nobody to answer, gets that default without a question.
+  - A named directory that is missing or empty becomes the lab; one that holds other files gets the lab in a subdirectory, so lab files never mix with a project's.
+  - New labs no longer go under `~/.cache/cyberlab` (`CYBERLAB_HOME`). `cyberlab labs` takes several directories; with none it lists the current directory and that older location, so labs made before 1.3.0 can still be continued.
+  - The brief's `Destination:` line and the hand-off's `Lab:` line say where the output is and whether it was named or the default.
+- Say who is who before any detail. `cyberlab run` records the IPv4, IPv6 and MAC address Docker gave each lab service while the lab runs (`NOTE address generator=…, victim=…`, and `addresses` in the provenance).
+  - Each trace document opens with a **Who is who** section: the attacker (or client), the victim (or server) and every other address in the trace (broadcast, multicast, spoofed or third party), with its role, MAC, lab service, image and frame counts, as a table and a Mermaid flowchart. The generator is called the attacker only in attack traces.
+  - Crafted traces take their roles from `craft_pcap.py`'s fixed addresses, or from a `Roles: attacker = <address>, …` line at the top of the trace's section in `mechanism.md`. Without either, the document names only the initiator and the responder, never a guessed attacker, and `doc` warns.
+  - `mechanism.md` opens with who is who, by lab service name: Docker assigns new addresses on every run, so they appear only in the trace documents.
+  - The hand-off report gains a `Who:` line before the traces.
+- Explain with diagrams first, in every document:
+  - Trace documents draw the exchange (a sequence diagram of the first 30 frames that carry it: payloads, non-TCP frames, connection openings and resets), the traffic over time (frames per time bin), the protocol mix, and how the trace was generated, as Mermaid diagrams. The raw tshark summaries move into a folded block.
+  - `mechanism.md` explains the attack, and what each trace holds, with Mermaid sequence diagrams and short text. The five templates ship them.
+  - `doc` warns when `mechanism.md` or a trace's section has no diagram, and when a diagram has a mistake that stops it rendering: a `;` in a sequence message, a block without its `end`, an unquoted flowchart label with parentheses.
+  - Checked by rendering with mermaid-cli 12: all 632 diagrams in the documents of 110 existing traces (lab captures, crafted traces, ARP, IPv6, SCTP, nested tunnels) and of 12 new ones (every template mode, a second FTP run, a `craft_pcap.py` trace and one agent test run), with no failure.
 - Write a reproduction document for every trace: `out/<trace>.md` says what the trace contains, how it was generated, what was checked and how someone else reproduces it.
   - `run`, `craft` and `verify` write it; the new `cyberlab doc <lab> [trace.pcap]...` writes it for traces made before documents existed. Their documents mark the lab file hashes as taken at that time, not at generation.
   - The document is built from the trace's `Traces:` line in `mission.md`, its `expect.json` entry, `out/verify.json`, its provenance, and tshark summaries: protocol hierarchy, conversations and the first 40 packets.
@@ -40,6 +54,7 @@
 
 ### Bug Fixes
 
+- A line starting with `#` inside a code block of `mechanism.md` was read as a heading, which could cut a section or replace the title. Code fences are now respected.
 - `craft` and `run` fail when the provenance step fails. Before, a re-craft kept the previous trace's `provenance.json` (with the old sha256, command and inputs) next to the new trace and exited 0. They now check the step's exit status and remove the stale provenance and document.
 
 ### Documentation

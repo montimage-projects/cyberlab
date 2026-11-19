@@ -9,8 +9,10 @@
 #   doctor                        check docker, compose and the tools image
 #   build                         build the tools image (cyberlab/tools:local)
 #   templates                     list the lab templates
-#   labs [dir]                    list mission labs under dir (default $CYBERLAB_HOME or
-#                                 ~/.cache/cyberlab): goal, scope and traces, to find one to continue
+#   labs [dir]...                 list mission labs in each dir and its subdirectories: goal, scope
+#                                 and traces, to find one to continue (default: the current
+#                                 directory, plus $CYBERLAB_HOME or ~/.cache/cyberlab, where
+#                                 versions before 1.3.0 put labs)
 #   new <dir> --from <template>   copy a template into a lab directory (keeps an existing
 #                                 mission.md and expect.json; refuses an existing lab)
 #   check <lab>                   isolation policy check of the lab's resolved compose file
@@ -115,18 +117,25 @@ cmd_templates() {
   done
 }
 
-cmd_labs() { # [dir]: mission labs (dirs holding mission.md) with goal, scope and traces
-  local home="${1:-${CYBERLAB_HOME:-$HOME/.cache/cyberlab}}" d found=0
-  [ -d "$home" ] || { echo "no labs: $home does not exist"; return 0; }
-  for d in "$home"/*/; do
-    [ -f "$d/mission.md" ] || continue
-    found=1
-    echo "${d%/}"
-    echo "  goal:   $(sed -n 's/^# *Mission: *//p' "$d/mission.md" | head -1)"
-    echo "  scope:  $(sed -n 's/^- *Scope: *//p' "$d/mission.md" | head -1)"
-    echo "  traces: $(cd "$d" && ls out/*.pcap 2>/dev/null | sed 's|^out/||' | tr '\n' ' ')"
+cmd_labs() { # [dir]...: mission labs (dirs holding mission.md) with goal, scope and traces
+  local dirs=("$@") d l nl=$'\n' seen=$'\n' found=0
+  if [ $# -eq 0 ]; then
+    dirs=("$PWD"); l="${CYBERLAB_HOME:-$HOME/.cache/cyberlab}"; [ -d "$l" ] && dirs+=("$l")
+  fi
+  for d in "${dirs[@]}"; do
+    [ -d "$d" ] || { echo "no labs: $d does not exist"; continue; }
+    for l in "$d" "$d"/*/; do
+      [ -f "$l/mission.md" ] || continue
+      l="$(cd "$l" && pwd -P)"
+      case "$seen" in *"$nl$l$nl"*) continue;; esac
+      seen="$seen$l$nl"; found=1
+      echo "$l"
+      echo "  goal:   $(sed -n 's/^# *Mission: *//p' "$l/mission.md" | head -1)"
+      echo "  scope:  $(sed -n 's/^- *Scope: *//p' "$l/mission.md" | head -1)"
+      echo "  traces: $(cd "$l" && ls out/*.pcap 2>/dev/null | sed 's|^out/||' | tr '\n' ' ')"
+    done
   done
-  [ "$found" = 1 ] || echo "no labs with a mission.md under $home"
+  [ "$found" = 1 ] || echo "no labs with a mission.md in ${dirs[*]} or their subdirectories"
 }
 
 cmd_new() {
@@ -178,6 +187,23 @@ runtime_isolation() { # <project>: verify the RUNNING lab; fails when nothing is
   done
   [ "$bad" = 0 ] && echo "PASS runtime isolation verified on $(echo "$cons" | wc -w | tr -d ' ') running container(s), $(echo "$nets" | wc -w | tr -d ' ') network(s)"
   return "$bad"
+}
+
+lab_addresses() { # <project>: {"<service>": {"ipv4", "ipv6", "mac"}} of its containers, read while they run
+  # (an exited container has no address any more; capture shares the victim's and has none of its own)
+  local c svc ip4 ip6 mac out=""
+  for c in $(docker ps -aq --filter "label=com.docker.compose.project=$1"); do
+    svc="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$c" 2>/dev/null)"
+    IFS=, read -r ip4 ip6 mac <<EOF
+$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}},{{.GlobalIPv6Address}},{{.MacAddress}}{{"\n"}}{{end}}' "$c" 2>/dev/null | head -1)
+EOF
+    case "$ip4" in *[!0-9.]*) ip4="";; esac   # Docker prints "invalid IP" for an address it does not have
+    case "$ip6" in *[!0-9a-fA-F:]*) ip6="";; esac
+    case "$mac" in *[!0-9a-fA-F:]*) mac="";; esac
+    [ -n "$svc" ] && [ -n "$ip4$ip6$mac" ] || continue
+    out="$out${out:+, }$(jstr "$svc"): {\"ipv4\": $(jstr "$ip4"), \"ipv6\": $(jstr "$ip6"), \"mac\": $(jstr "$mac")}"
+  done
+  printf '{%s}' "$out"
 }
 
 skill_version() { sed -n 's/^ *version: *//p' "$SKILL_DIR/SKILL.md" | head -1; }
@@ -245,7 +271,9 @@ cmd_run() {
     docker compose build -q || die "docker compose build failed (see above). Builds may download; the running lab stays offline." 2
   fi
   docker compose up -d >"out/.$mode.up.log" 2>&1 || { cat "out/.$mode.up.log" >&2; die "docker compose up failed (log: $lab/out/.$mode.up.log)." 2; }
+  local addrs; addrs="$(lab_addresses "$proj")"   # at once: the generator may finish within seconds
   runtime_isolation "$proj" || die "the running lab is not isolated; it was torn down." 2
+  echo "NOTE address $(printf '%s' "$addrs" | tr -d '{}"' | sed 's/: ipv4: /=/g; s/, ipv6: [^,]*, mac: [^,]*//g')"
   local cid; cid="$(docker compose ps -aq generator)"
   [ -n "$cid" ] || die "generator container not found after up." 2
   local waited=0 st
@@ -281,7 +309,7 @@ cmd_run() {
   echo "PASS capture 0 packets dropped by kernel"
   local pk_sha; pk_sha="$(write_provenance "$lab" "$mode.pcap" "lab capture" "$(basename "$lab") mode $mode" "cyberlab run <lab> $mode" \
     "$compose_resolved" "{\"MODE\": $(jstr "$mode"), \"PCAP\": $(jstr "$mode"), \"CYBERLAB_TIMEOUT\": $(jstr "$TIMEOUT")}" \
-    ", \"project\": \"$proj\", \"generator_exit\": $rc, \"dropped\": 0, \"images\": $images" $image_ids)" && [ -n "$pk_sha" ] ||
+    ", \"project\": \"$proj\", \"generator_exit\": $rc, \"dropped\": 0, \"images\": $images, \"addresses\": ${addrs:-null}" $image_ids)" && [ -n "$pk_sha" ] ||
     no_provenance "$lab" "$mode.pcap"
   echo "NOTE trace   out/$mode.pcap: ${pk_sha%% *} frames, provenance out/$mode.provenance.json"
   local vrc=0; verify_traces "$lab" "$mode.pcap" || vrc=$?

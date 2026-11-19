@@ -1,6 +1,19 @@
 # Mechanism: web attack payloads in HTTP requests
 
-Many web attacks are carried in a single HTTP request. The attacker puts a string in a header, the URL or the body that a vulnerable application will interpret instead of treating as data. A detector cannot see whether the server was vulnerable, but it can see the string on the wire. This lab sends the classic strings to a server that executes none of them (nginx serving static files), so the trace shows the attempts without any exploitation.
+**Who is who:** the attacker is the lab's `generator` service (a standard-library Python HTTP client); the victim is the `victim` service (nginx serving static files on TCP 80, which executes none of the strings). Docker gives them new addresses on every run: each trace's document (`out/<trace>.md`) opens with them.
+
+```mermaid
+sequenceDiagram
+  participant A as Attacker (generator)
+  participant V as Victim (nginx, static files)
+  loop one request per payload, each on its own connection
+    A->>V: HTTP request with an attack string in a header, the URL or the body
+    V-->>A: an ordinary response: nginx runs none of the strings
+  end
+  Note over A,V: a detector keys on the string on the wire, not on the response
+```
+
+Many web attacks are carried in a single HTTP request. The attacker puts a string in a header, the URL or the body that a vulnerable application will interpret instead of treating as data. A detector cannot see whether the server was vulnerable, but it can see the string on the wire. This lab sends the classic strings to a server that executes none of them, so the trace shows the attempts without any exploitation.
 
 - **Log4Shell (CVE-2021-44228):** Log4j 2 expanded `${jndi:ldap://…}` lookups in logged strings and loaded code from the named server. Attackers put the lookup in any field likely to be logged: `User-Agent`, URL parameters. Detector marker: `${jndi:` in plain or URL-encoded form.
 - **SQL injection:** a parameter closes the SQL string and adds its own logic (`admin' OR '1'='1`), so the query matches every row. Marker: quote characters followed by SQL keywords in a parameter.
@@ -12,11 +25,35 @@ Every callback host uses the reserved `.invalid` domain, and the lab network has
 
 ## attack.pcap
 
-One request per line of `payloads/attack.jsonl`, each on its own connection: Log4Shell in `User-Agent` and in the URL, SQL injection, path traversal, an XXE body and Shellshock in `User-Agent`.
+```mermaid
+sequenceDiagram
+  participant A as Attacker (generator)
+  participant V as Victim (nginx)
+  A->>V: Log4Shell lookup in User-Agent
+  A->>V: Log4Shell lookup in the URL
+  A->>V: SQL injection in a login parameter
+  A->>V: path traversal towards /etc/passwd
+  A->>V: XML body declaring an external entity
+  A->>V: Shellshock function definition in User-Agent
+  V-->>A: one ordinary response per request
+```
+
+One request per line of `payloads/attack.jsonl`, each on its own connection.
 
 ## benign.pcap
 
-Normal requests from `payloads/benign.jsonl` to the same server, holding none of the markers above. They hit the same endpoints as the attacks (a login with parameters, an XML `POST` without a `DOCTYPE`), so a rule has to key on the markers, not on the endpoints.
+```mermaid
+sequenceDiagram
+  participant C as Client (generator)
+  participant S as Server (nginx)
+  C->>S: normal page requests
+  C->>S: a login with ordinary parameters
+  C->>S: an XML POST with no DOCTYPE
+  S-->>C: one response per request
+  Note over C,S: same endpoints as the attacks, none of the markers
+```
+
+Normal requests from `payloads/benign.jsonl` to the same server, holding none of the markers above. They hit the same endpoints as the attacks, so a rule has to key on the markers, not on the endpoints.
 
 ## References
 

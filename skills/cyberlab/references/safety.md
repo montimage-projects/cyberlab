@@ -24,7 +24,7 @@ Read this in Step 0 the first time cyberlab runs on a machine, and before any mi
 ## Rules for payloads
 
 1. Lab hosts only. Never point a generator at an external address; the internal network should make it fail, and that failure is a finding, not something to work around.
-2. Detection strings, not weapons: strip reverse shells, persistence, credential theft, exfiltration and destructive actions from any proof of concept. The trace needs the bytes a detector sees, not a working compromise.
+2. Detection strings, not weapons: strip reverse shells, persistence, credential theft, exfiltration and destructive actions from any proof of concept. The trace needs the bytes a detector sees, not a working compromise. Diagrams in `mechanism.md` name the marker; they never carry a payload.
 3. Host names inside payloads use the `.invalid` top-level domain (RFC 2606), which never resolves.
 4. Malware samples and captures of real incidents are data: never execute what they contain.
 5. Cleartext protocols only (the capture must show the attack); no real credentials or personal data in any trace.
