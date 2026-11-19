@@ -50,7 +50,7 @@ cyberlab run ~/labs/ftp attack                  # writes ~/labs/ftp/out/attack.p
 cyberlab run ~/labs/ftp benign                  # writes ~/labs/ftp/out/benign.pcap
 ```
 
-Each `run` checks the isolation policy, starts the lab, captures, tears it down and verifies the trace against the template's `expect.json`. It prints one `PASS`/`FAIL` line per check, then `RESULT PASS`. The first run builds the template's images. `cyberlab status ~/labs/ftp` confirms nothing is left running. All commands: [Usage and CLI reference](#usage-and-cli-reference).
+Each `run` checks the isolation policy, starts the lab, captures, tears it down and verifies the trace against the template's `expect.json`. It prints one `PASS`/`FAIL` line per check, then `RESULT PASS`, and writes the trace's document, `out/<mode>.md`. A template has no `mission.md`, so `doc` adds a `WARN doc` line saying the document has no description: the trace itself passed. The first run builds the template's images. `cyberlab status ~/labs/ftp` confirms nothing is left running. All commands: [Usage and CLI reference](#usage-and-cli-reference).
 
 ## Why cyberlab
 
@@ -311,7 +311,7 @@ To reproduce a trace, share the lab directory with it: the document lists the fi
 │   ├── scripts/
 │   │   ├── cyberlab            CLI
 │   │   ├── lab_policy.py       isolation policy for a resolved compose file
-│   │   ├── verify.py           expectations check (tshark filters, frame counts, endpoints)
+│   │   ├── verify.py           expectations check (tshark filters, counts, time windows, distinct values, spacing, endpoints)
 │   │   ├── craft_pcap.py       synthetic traces: payloads behind real headers
 │   │   └── trace_doc.py        per-trace provenance and reproduction document
 │   ├── references/             mission brief, lab authoring, crafted traces, safety
@@ -319,7 +319,9 @@ To reproduce a trace, share the lab directory with it: the document lists the fi
 │   ├── assets/tools/           the tools image (tcpdump, tshark, Python)
 │   ├── evals/evals.json        agent-behaviour evals
 │   └── docs/README.md          catalog page for the skill
-└── examples/mmt-workbench/     example consumer, not part of the skill
+├── examples/mmt-workbench/     example consumer, not part of the skill
+├── assets/logo/                logo SVG variants, PNG exports, brand-showcase.html
+└── tests/                      unit tests for trace_doc.py (python3 -m unittest discover -s tests)
 ```
 
 `examples/mmt-workbench/` is an example *consumer* environment: a Linux image with mmt-dpi, mmt-security and mmt-plugin that replays cyberlab traces (`detect.sh`). See [its README](examples/mmt-workbench/README.md).

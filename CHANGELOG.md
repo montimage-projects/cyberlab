@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.3.0 — 2026-11-19
+
 ### Features
 
 - Ask where to store the output. For a new lab, a person who names no location is asked in the agent's single Step 1 message, with the default offered: `<invocation directory>/<YYYYMMDD-HHMMSS>-<slug>`, in the directory the skill was invoked from. A calling skill, or a run with nobody to answer, gets that default without a question.
@@ -64,6 +66,9 @@
 
 - Put onboarding first in the README: install, one-time setup, the common agent request, what comes back and how to replay it, then the CLI-only path. The problem, diagrams, features, templates and safety come after; the duplicate "Get started" section is gone.
 - Add the cyberLab logo: a sealed lab with a captured trace that ends in a check mark, in the MMT amber palette. `assets/logo/` holds 9 SVG variants (mark, full, full for dark backgrounds, badge, wordmark, app icon, favicon, white, black), PNG exports in `assets/logo/png/`, and `brand-showcase.html`. The README header shows the badge (the logo on its own dark tile, with outlined text), which reads the same whatever the GitHub or system theme.
+- Add a lab topology section to the README: a Mermaid diagram of the victim, generator and capture containers, the no-network tools containers and the consumer, with arrows for packets, the capture tap and files, and a table of each container's role, network and images. Detailed reference material moves into collapsed sections.
+
+**Full Changelog**: https://github.com/montimage-projects/cyberlab/compare/v1.2.0...v1.3.0
 
 ## v1.2.0 — 2026-11-18
 

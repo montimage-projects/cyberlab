@@ -14,7 +14,7 @@
 - One mission, one task: attack and benign pcaps for a detection rule, or captures of a protocol for a parser, with as many traces as the task needs. Later work on the same task reuses the lab (`cyberlab labs` finds it); an unrelated task gets a new one.
 - Minimal labs: one victim, one generator, one capture sidecar; no IDS or DPI inside — consumers replay the traces with their own tools.
 - Safety checked three times: an allowlist policy on the compose file (internal network, no host address on the bridge), the running containers and network, and the teardown.
-- Expectations first: tshark filters with frame-count bounds in `expect.json`; a trace is done only when they pass.
+- Expectations first: tshark filters in `expect.json` with bounds on counts, the most matches in a time window, distinct values and spacing; a trace is done only when they pass.
 - Output where you work: the agent asks where to store the lab and its traces, and defaults to the directory you invoked it from.
 - Diagrams before text: every trace document opens with who is who (the attacker and the victim, with their IP addresses as captured) and draws the exchange, the traffic over time and the protocol mix as Mermaid diagrams; `mechanism.md` explains the attack with sequence diagrams.
 - Host needs only Docker (validated on macOS arm64 Docker Desktop and Ubuntu 24.04 arm64; Windows not yet run); crafted synthetic traces need no network at all.
@@ -67,7 +67,7 @@ flowchart LR
 |---|---|
 | `scripts/cyberlab` | CLI: doctor, build, templates, labs, new, check, run, craft, verify, doc, down, status, nuke |
 | `scripts/lab_policy.py` | isolation policy for a resolved compose file |
-| `scripts/verify.py` | expectations check (tshark filters, frame counts, endpoints) |
+| `scripts/verify.py` | expectations check (tshark filters, counts, time windows, distinct values, spacing, endpoints) |
 | `scripts/craft_pcap.py` | synthetic traces: payloads behind real Ethernet/IP/TCP/UDP headers |
 | `scripts/trace_doc.py` | per-trace provenance and document (`out/<trace>.md`): who is who, Mermaid diagrams, checks, reproduction |
 | `assets/tools/` | the tools image (tcpdump, tshark, Python) |
