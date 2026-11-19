@@ -209,5 +209,87 @@ class DerivedTrace(unittest.TestCase):
         self.assertIn("derived from `benign.pcap`", "\n".join(trace_doc.who_section(who)))
 
 
+class DocumentVersion(unittest.TestCase):
+    """#15: the header names the cyberlab that wrote the document; the summary table keeps the trace's version."""
+
+    NOW = "2026-11-19T14:23:20Z"
+
+    def lab(self, trace_version=None):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        os.mkdir(os.path.join(d, "out"))
+        open(os.path.join(d, "out", "attack.pcap"), "wb").close()
+        prov = {"origin": "crafted (synthetic)", "generator": "craft_pcap.py icmp"}
+        if trace_version is not None:
+            prov["cyberlab_version"] = trace_version
+        with open(os.path.join(d, "out", "attack.provenance.json"), "w") as f:
+            json.dump(prov, f)
+        return d
+
+    def render(self, lab, version):
+        """The document's lines, with tshark and capinfos answering nothing."""
+        with mock.patch.object(trace_doc, "run", return_value=(0, "", "")):
+            return trace_doc.render(lab, "attack.pcap", mission(), {}, {}, self.NOW, "lab", {}, [],
+                                    doc_version=version).split("\n")
+
+    def header(self, lines):
+        return next(l for l in lines if l.startswith("<!--"))
+
+    def cyberlab_row(self, lines):
+        return next(l for l in lines if l.startswith("| cyberlab |"))
+
+    def test_header_names_the_version_that_wrote_the_document(self):
+        lines = self.render(self.lab("1.2.0"), "1.3.0")
+        self.assertEqual(self.header(lines), f"<!-- Written by cyberlab 1.3.0 on {self.NOW}; "
+                                             "regenerate with: cyberlab doc <lab> attack.pcap -->")
+        self.assertNotIn("1.2.0", self.header(lines))
+
+    def test_table_keeps_the_trace_version_and_names_the_writer_when_they_differ(self):
+        lines = self.render(self.lab("1.2.0"), "1.3.0")
+        self.assertEqual(self.cyberlab_row(lines), "| cyberlab | 1.2.0 (document written by 1.3.0) |")
+
+    def test_same_version_reads_as_before_apart_from_the_header(self):
+        lines = self.render(self.lab("1.3.0"), "1.3.0")
+        self.assertEqual(self.cyberlab_row(lines), "| cyberlab | 1.3.0 |")
+        self.assertIn("Written by cyberlab 1.3.0 on", self.header(lines))
+        self.assertNotIn("document written by", "\n".join(lines))
+
+    def test_unknown_writer_version_leaves_no_gap_and_no_suffix(self):
+        lines = self.render(self.lab("1.2.0"), "")
+        self.assertEqual(self.header(lines), f"<!-- Written by cyberlab on {self.NOW}; "
+                                             "regenerate with: cyberlab doc <lab> attack.pcap -->")
+        self.assertEqual(self.cyberlab_row(lines), "| cyberlab | 1.2.0 |")
+
+    def test_trace_without_recorded_version_still_names_the_writer(self):
+        lines = self.render(self.lab(), "1.3.0")
+        self.assertIn("Written by cyberlab 1.3.0 on", self.header(lines))
+        self.assertEqual(self.cyberlab_row(lines), "| cyberlab | unrecorded (generated before trace documents "
+                                                   "existed; document written by 1.3.0) |")
+        lines = self.render(self.lab(""), "1.3.0")
+        self.assertEqual(self.cyberlab_row(lines), "| cyberlab | unrecorded (document written by 1.3.0) |")
+        lines = self.render(self.lab(), "")
+        self.assertEqual(self.cyberlab_row(lines), "| cyberlab | unrecorded (generated before trace documents existed) |")
+
+    def test_doc_command_passes_its_version_to_the_document(self):
+        lab = self.lab("1.2.0")
+        argv = ["trace_doc.py", "doc", "--lab", lab, "--version", "1.3.0"]
+        with mock.patch.object(sys, "argv", argv), mock.patch.object(trace_doc, "run", return_value=(0, "", "")), \
+                mock.patch("sys.stdout"), self.assertRaises(SystemExit) as done:
+            trace_doc.main()
+        self.assertEqual(done.exception.code, 0)
+        with open(os.path.join(lab, "out", "attack.md")) as f:
+            lines = f.read().split("\n")
+        self.assertIn("Written by cyberlab 1.3.0 on", self.header(lines))
+        self.assertEqual(self.cyberlab_row(lines), "| cyberlab | 1.2.0 (document written by 1.3.0) |")
+
+    def test_cyberlab_passes_the_skill_version_to_every_doc_call(self):
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "skills", "cyberlab", "scripts", "cyberlab")
+        with open(script) as f:
+            calls = [l for l in f if "trace_doc.py doc " in l]
+        self.assertEqual(len(calls), 2)
+        for line in calls:
+            self.assertIn('--version "$(skill_version)"', line)
+
+
 if __name__ == "__main__":
     unittest.main()

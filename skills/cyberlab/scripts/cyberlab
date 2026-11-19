@@ -240,7 +240,7 @@ no_provenance() { # <lab> <trace>: write_provenance failed. An earlier run's pro
 write_docs() { # <lab> [trace]...: out/<trace>.md, the trace's reproduction document (never fails the command)
   local lab="$1"; shift
   local a=(); for t in "$@"; do a+=(--trace "$t"); done
-  tools -v "$lab:/lab" -- python3 /cyberlab/trace_doc.py doc --lab /lab --lab-name "$(basename "$lab")" ${a[@]+"${a[@]}"} ||
+  tools -v "$lab:/lab" -- python3 /cyberlab/trace_doc.py doc --lab /lab --lab-name "$(basename "$lab")" --version "$(skill_version)" ${a[@]+"${a[@]}"} ||
     echo "NOTE doc    could not write every trace document (above); rerun: cyberlab doc $lab"
 }
 
@@ -371,7 +371,7 @@ cmd_doc() { # <lab> [trace.pcap]...: (re)write out/<trace>.md from mission.md, e
   need_docker; need_tools
   lab="$(abspath "$lab")"
   local a=(); for t in "$@"; do a+=(--trace "$t"); done
-  tools -v "$lab:/lab" -- python3 /cyberlab/trace_doc.py doc --lab /lab --lab-name "$(basename "$lab")" ${a[@]+"${a[@]}"} || die "trace_doc.py failed (above)." 2
+  tools -v "$lab:/lab" -- python3 /cyberlab/trace_doc.py doc --lab /lab --lab-name "$(basename "$lab")" --version "$(skill_version)" ${a[@]+"${a[@]}"} || die "trace_doc.py failed (above)." 2
 }
 
 cmd_down() {
