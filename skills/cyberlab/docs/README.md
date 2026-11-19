@@ -9,6 +9,21 @@
 
 > Describe what the lab is for; get the smallest isolated Docker lab for that one mission, and trace files proven to show what you asked.
 
+## Send this to your agent
+
+Paste it into Claude Code, Codex, Cursor or any agent that runs shell commands, on a machine with Docker (Compose v2) and Node.js:
+
+```text
+Install the cyberlab skill if you don't have it yet:
+  npx skills add https://github.com/montimage-projects/cyberlab --skill cyberlab -g -y
+Then use it (if it is not loaded yet, read ~/.agents/skills/cyberlab/SKILL.md and follow it)
+to generate attack.pcap and benign.pcap for a Suricata FTP brute-force rule:
+the attack has at least 5 failed logins from one client within 60 seconds,
+the benign trace has one successful login. Store the lab in ./labs/ftp-bruteforce.
+```
+
+For another attack or protocol, fill in the template under [Usage](#usage).
+
 ## Highlights
 
 - One mission, one task: attack and benign pcaps for a detection rule, or captures of a protocol for a parser, with as many traces as the task needs. Later work on the same task reuses the lab (`cyberlab labs` finds it); an unrelated task gets a new one.
@@ -57,8 +72,22 @@ flowchart LR
 
 ## Usage
 
+Fill in the brackets; every count, time window and variant you name becomes an expectation the trace must pass:
+
+```text
+Install the cyberlab skill if you don't have it yet:
+  npx skills add https://github.com/montimage-projects/cyberlab --skill cyberlab -g -y
+Then use it (if it is not loaded yet, read ~/.agents/skills/cyberlab/SKILL.md and follow it)
+to generate <attack.pcap and benign.pcap | one capture.pcap>
+showing <the attack or protocol, its variant, and the numbers that matter>,
+for <what will replay it: a Snort/Suricata/mmt-security rule, a protocol parser...>.
+Store the lab in <directory>.
 ```
-/cyberlab traces for an FTP brute-force rule
+
+With the skill installed, the request alone is enough, or the slash form in Claude Code:
+
+```text
+/cyberlab traces for an FTP brute-force rule: 5+ failed logins, and a normal login as benign
 ```
 
 ## Resources
