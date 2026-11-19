@@ -55,6 +55,8 @@
 ### Bug Fixes
 
 - A line starting with `#` inside a code block of `mechanism.md` was read as a heading, which could cut a section or replace the title. Code fences are now respected.
+- A `Roles:` line in `mechanism.md` that named a host by its MAC address did not resolve when that host also sent IP frames, so `doc` warned that it matched no address and the Who is who table listed the host as "Other". The MAC now resolves to the host's address when the MAC sent from only that address (or one IPv4 and one IPv6 address) and no other MAC sent from it. In a spoofed trace, where a MAC sends for several addresses or shares one with another MAC, the warning stays and says why: name such a host by its IP address.
+- A trace crafted by a `--script` that reads another trace of the lab (such as a `derive.py` that edits `out/benign.pcap`) was described as having addresses the generator wrote, with "no host or network was involved". Its Who is who section now names the source trace (and whether it is a lab capture), and the diagram title and the "Other" rows no longer say the addresses were invented. Traces written from scratch keep the old wording.
 - `craft` and `run` fail when the provenance step fails. Before, a re-craft kept the previous trace's `provenance.json` (with the old sha256, command and inputs) next to the new trace and exited 0. They now check the step's exit status and remove the stale provenance and document.
 
 ### Documentation

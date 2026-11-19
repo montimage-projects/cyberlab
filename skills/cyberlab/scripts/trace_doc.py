@@ -53,7 +53,8 @@ def script_reads(lab, command, generator):
     if not m:
         return None
     try:
-        text = open(os.path.join(lab, m.group(1).strip("'")), errors="replace").read()
+        with open(os.path.join(lab, m.group(1).strip("'")), errors="replace") as f:
+            text = f.read()
     except OSError:
         return None
     return {n for n in os.listdir(os.path.join(lab, "out")) if n.endswith(".pcap") and n in text}
@@ -502,19 +503,45 @@ def craft_addresses():
         return set(), set()
 
 
-def who_is_who(trace, prov, mech, mission, rows):
+def derived_sources(prov, lab=""):
+    """The lab traces a --script craft read (recorded at generation), each with what it is when its own
+    provenance says so: [(name, "a lab capture" | "a crafted trace" | "")]. As in doc_warnings, a trace the
+    script does not name (recorded by an older cyberlab that listed every trace in out/) is no source."""
+    reads = script_reads(lab, prov.get("command"), prov.get("generator")) if lab else None
+    out = []
+    for n in sorted(prov.get("lab_traces_at_generation") or {}):
+        if reads is not None and n not in reads:
+            continue
+        origin = ""
+        if lab:
+            try:
+                with open(os.path.join(lab, "out", n[:-5] + ".provenance.json")) as f:
+                    origin = json.load(f).get("origin", "")
+            except (OSError, ValueError, AttributeError):
+                origin = ""
+        out.append((n, "a lab capture" if origin == "lab capture" else ("a crafted trace" if str(origin).startswith("crafted") else "")))
+    return out
+
+
+def who_is_who(trace, prov, mech, mission, rows, lab=""):
     """Who sent the trace's frames: one entry per address, the primary roles first.
     Sources, strongest last: the trace (inferred), craft_pcap.py's fixed addresses (crafted), the
-    addresses `cyberlab run` recorded from Docker (recorded), a Roles: line in mechanism.md (declared)."""
+    addresses `cyberlab run` recorded from Docker (recorded), a Roles: line in mechanism.md (declared).
+    `lab` lets a derived trace say what its source traces are."""
     name = trace[:-5]
     desc = mission["traces"].get(trace, "")
     kind = trace_kind(trace, desc)
     gen_role, vic_role = ("Attacker", "Victim") if kind == "attack" else ("Client", "Server")
     origin = prov.get("origin", "")
     crafted = origin.startswith("crafted")
+    derived = derived_sources(prov, lab) if crafted else []
+    gen = str(prov.get("generator") or "").split()
+    script = gen[1] if len(gen) > 1 and gen[0] == "python3" else "the script"
     stats = collections.OrderedDict()
     pairs = collections.Counter()
     mac_of = {}
+    mac_ips = collections.defaultdict(set)   # MAC -> the addresses it sent IP frames from, and back
+    ip_macs = collections.defaultdict(set)
     for r in rows:
         for a, side in ((r["src"], "sent"), (r["dst"], "recv")):
             if a:
@@ -524,6 +551,9 @@ def who_is_who(trace, prov, mech, mission, rows):
             stats[r["src"]]["bytes"] += r["len"]
             if r["esrc"] and r["esrc"] != r["src"]:
                 mac_of.setdefault(r["src"], r["esrc"])
+                if addr_kind(r["src"]) == "ip" and not addr_note(r["src"]):
+                    mac_ips[r["esrc"].lower()].add(r["src"])
+                    ip_macs[r["src"]].add(r["esrc"].lower())
         if r["src"] and r["dst"]:
             pairs[(r["src"], r["dst"])] += 1
     role = {}       # address -> {"role", "service", "how"}
@@ -544,11 +574,25 @@ def who_is_who(trace, prov, mech, mission, rows):
     unresolved = []
     for rname, target in mech.get("roles", {}).get(trace) or mech.get("roles", {}).get(name) or []:
         keys = [k for k in svc_addr.get(target, []) if k in stats] or ([target] if target in stats else [])
+        low = target.lower()
         if not keys:
-            low = target.lower()
             keys = [k for k in stats if k.lower() == low]
+        why = ""
+        if not keys and addr_kind(target) == "mac" and mac_ips.get(low):
+            # a MAC that sent IP frames is folded into its IP address: take that address when it is the
+            # host's only one (one IPv4, one IPv6) and no other MAC sent it, never guess in a spoofed trace
+            ips = sorted(mac_ips[low], key=lambda x: (ipaddress.ip_address(x).version, ipaddress.ip_address(x)))
+            versions = [ipaddress.ip_address(x).version for x in ips]
+            shared = sorted({m for x in ips for m in ip_macs[x]} - {low})
+            if len(versions) != len(set(versions)):
+                why = f"MAC {target} sent IP frames from several addresses ({', '.join(ips)})"
+            elif shared:
+                both = [x for x in ips if ip_macs[x] - {low}]
+                why = (f"{', '.join(both)}, which MAC {target} sent from, also came from MAC {', '.join(shared)}")
+            else:
+                keys = [x for x in ips if x in stats]
         if not keys:
-            unresolved.append((rname, target))
+            unresolved.append((rname, target, why))
         for k in keys:
             role[k] = {"role": rname, "service": target if target in svc_addr else role.get(k, {}).get("service", ""), "how": "declared"}
     def main_peer(a):
@@ -588,6 +632,9 @@ def who_is_who(trace, prov, mech, mission, rows):
             entry = dict(r)
         elif note:
             entry = {"role": f"Other ({note})", "service": "", "how": "address"}
+        elif derived:
+            src = derived[0][0] if len(derived) == 1 else "the source traces"
+            entry = {"role": f"Other (from {src} or added by {script})", "service": "", "how": "address"}
         elif crafted:
             entry = {"role": "Other (crafted address)", "service": "", "how": "address"}
         elif svc_addr:
@@ -601,7 +648,7 @@ def who_is_who(trace, prov, mech, mission, rows):
         out.append(entry)
     out.sort(key=lambda e: (order.get(e["role"], 2 if e["how"] in ("declared", "recorded") and not e["role"].startswith("Other") else 3), -(e["sent"] + e["recv"])))
     return {"kind": kind, "gen": gen_role, "vic": vic_role, "rows": out, "pairs": pairs, "unresolved": unresolved,
-            "crafted": crafted, "lab": bool(services), "inferred": any(e["how"] == "inferred" and not e["role"].startswith("Other") for e in out)}
+            "crafted": crafted, "derived": derived, "script": script, "lab": bool(services), "inferred": any(e["how"] == "inferred" and not e["role"].startswith("Other") for e in out)}
 
 
 def mm(s):
@@ -619,8 +666,12 @@ def who_diagram(who):
     ids = {e["addr"]: f"n{i}" for i, e in enumerate(shown)}
     rest = rows[NODE_MAX:]
     L = ["```mermaid", "flowchart LR"]
-    title = "crafted trace: addresses written by the generator, no network used" if who["crafted"] else (
-        "lab network: internal, no route out" if who["lab"] else "hosts in the trace")
+    if who.get("derived"):
+        title = f"derived from {', '.join(n for n, _ in who['derived'])} by {who['script']}: addresses from there"
+    elif who["crafted"]:
+        title = "crafted trace: addresses written by the generator, no network used"
+    else:
+        title = "lab network: internal, no route out" if who["lab"] else "hosts in the trace"
     L.append(f'  subgraph net["{mm(title)}"]')
     for e in shown:
         L.append(f'    {ids[e["addr"]]}["{mm_label(e)}"]')
@@ -782,7 +833,13 @@ def who_section(who):
             s += " Also: " + "; ".join(name(e) for e in rest) + "."
     else:
         s = "; ".join(name(e) for e in prim) + "." if prim else "No host role could be told from the trace."
-    if who["crafted"]:
+    if who.get("derived"):
+        srcs = [f"`{n}`" + (f" ({d})" if d else "") for n, d in who["derived"]]
+        srcs = srcs[0] if len(srcs) == 1 else ", ".join(srcs[:-1]) + " and " + srcs[-1]
+        whose = "that trace's" if len(who["derived"]) == 1 else "those traces'"
+        s += (f" The trace is derived from {srcs}: `{who['script']}` edited or added frames, so its addresses are "
+              f"{whose} unless the script wrote them.")
+    elif who["crafted"]:
         s += " The trace is crafted: the generator wrote these addresses, and no host or network was involved."
     elif who["lab"]:
         s += " The capture ran in the victim's network namespace: the trace shows the traffic as the victim saw it."
@@ -844,7 +901,7 @@ def render(lab, trace, mission, expect, verify, now, lab_name="", mech=None, row
     s = trace_summaries(path)
     mech = mech or {}
     rows = frame_rows(path) if rows is None else rows
-    who = who_is_who(trace, prov, mech, mission, rows) if who is None else who
+    who = who_is_who(trace, prov, mech, mission, rows, lab) if who is None else who
 
     L = []
     L.append(f"# {trace}")
@@ -1124,8 +1181,9 @@ def doc_warnings(lab, trace, mission, mech, verify, who=None):
         if who["inferred"]:
             w.append(f"who is who was inferred from the trace: open mechanism.md's `## {trace}` section with "
                      "`Roles: <role> = <lab service or address>, ...`")
-        for r, t in who["unresolved"]:
-            w.append(f"`Roles: {r} = {t}` in mechanism.md matches no address in the trace")
+        for r, t, why in who["unresolved"]:
+            w.append(f"`Roles: {r} = {t}` in mechanism.md matches no address in the trace"
+                     + (f": {why}; name the host by its IP address" if why else ""))
     checks = verify.get(trace, {}).get("checks", [])
     if not checks:
         w.append("not verified: run cyberlab verify")
@@ -1183,7 +1241,7 @@ def cmd_doc(a):
         except (OSError, json.JSONDecodeError):
             prov = {}
         rows = frame_rows(path)
-        who = who_is_who(t, prov, mech, mission, rows)
+        who = who_is_who(t, prov, mech, mission, rows, a.lab)
         write_atomic(os.path.join(out_dir, t[:-5] + ".md"), render(a.lab, t, mission, expect, verify, now, a.lab_name, mech, rows, who))
         warns = doc_warnings(a.lab, t, mission, mech, verify, who)
         print(f"PASS doc   out/{t[:-5]}.md" + (f" ({len(warns)} warning(s))" if warns else ""))
