@@ -10,6 +10,51 @@
 
 Tell your agent what a trace must show. **cyberlab** builds the smallest isolated Docker lab for that one job, captures the traffic, tears the lab down and checks the pcap with tshark before handing it back.
 
+## The prompt
+
+Once the skill is installed ([Quick start](#quick-start)), send this to your agent and fill in the brackets:
+
+```text
+Use the cyberlab skill to generate <attack.pcap and benign.pcap | one capture.pcap>
+showing <the attack or protocol, its variant, and the numbers that matter>,
+for <what will replay it: a Snort/Suricata/mmt-security rule, a protocol parser...>.
+Store the lab in <directory>.
+```
+
+The more exact the claim, the stronger the check: every count, time window and variant you name becomes a tshark expectation the trace must pass before you get it. For example:
+
+**An attack/benign pair for a detection rule**
+
+```text
+Use the cyberlab skill to generate attack.pcap and benign.pcap for a Suricata FTP brute-force rule:
+the attack has at least 5 failed logins from one client within 60 seconds,
+the benign trace has one successful login. Store the lab in ./labs/ftp-bruteforce.
+```
+
+**A denial-of-service trace**
+
+```text
+Use the cyberlab skill to generate an HTTP/2 Rapid Reset (CVE-2023-44487) attack.pcap with
+at least 100 RST_STREAM frames over cleartext h2c, and a benign.pcap with the same number of
+streams completed at a normal pace, for a Snort 3 rule.
+```
+
+**A protocol capture for a parser**
+
+```text
+Use the cyberlab skill to capture Redis RESP traffic on tcp/6379 into capture.pcap:
+requests and replies in both directions, including at least one error reply. It feeds a parser test.
+```
+
+**A protocol with no runnable implementation**
+
+```text
+Use the cyberlab skill to craft a synthetic CoAP trace on udp/5684: a confirmable GET
+and its 2.05 Content reply with the same message ID.
+```
+
+The agent asks once for anything missing (protocol, variant, consumer, where to store the lab), then hands back the traces with a report of who attacked whom and what was checked.
+
 ## Quick start
 
 You need Docker with Compose v2, and Node.js for `npx`.
@@ -27,7 +72,7 @@ npx skills add https://github.com/montimage-projects/cyberlab --skill cyberlab
 ~/.claude/skills/cyberlab/scripts/cyberlab build
 ```
 
-**3. Ask your agent for traces:**
+**3. Ask your agent for traces** with [the prompt](#the-prompt), or the short slash form in Claude Code:
 
 ```text
 /cyberlab traces for an FTP brute-force rule: 5+ failed logins, and a normal login as benign
