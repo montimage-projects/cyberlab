@@ -377,13 +377,25 @@ cmd_doc() { # <lab> [trace.pcap]...: (re)write out/<trace>.md from mission.md, e
 }
 
 cmd_down() {
-  local lab="" rmi=()
+  local lab="" rmi=() proj="" left
   while [ $# -gt 0 ]; do case "$1" in --images) rmi=(--rmi local); shift;; -*) die "down: unknown option '$1'.";; *) [ -z "$lab" ] || die "usage: cyberlab down <lab> [--images]"; lab="$1"; shift;; esac; done
   [ -n "$lab" ] || die "usage: cyberlab down <lab> [--images]"
   need_lab "$lab"; need_docker
+  if [ "${#rmi[@]}" -gt 0 ]; then   # read the project name before anything is removed: the image check below needs it
+    need_tools; proj="$(project_of "$(abspath "$lab")")"
+    case "$proj" in cyberlab-*) ;; *) die "cannot read the lab's project name (got '$proj'); nothing was removed." 2;; esac
+  fi
   # --rmi local removes only the images compose built for this lab, never pulled ones
   (cd "$lab" && docker compose down -v --remove-orphans ${rmi[@]+"${rmi[@]}"}) || die "docker compose down failed in $lab." 2
-  echo "PASS down $lab${rmi[*]:+ (built images removed)}"
+  if [ -n "$proj" ]; then
+    # Compose before v5.5.1 keeps the untagged images a rebuild left behind: remove what the project still labels
+    left="$(docker image ls -q --filter "label=com.docker.compose.project=$proj" | sort -u)"
+    # shellcheck disable=SC2086
+    [ -z "$left" ] || docker image rm $left >/dev/null 2>&1
+    left="$(docker image ls -q --filter "label=com.docker.compose.project=$proj" | sort -u)"
+    [ -z "$left" ] || die "down: $(echo "$left" | wc -l | tr -d ' ') image(s) built for $proj could not be removed: $(printf '%s' "$left" | tr '\n' ' '). The rest of the lab is down; check: cyberlab status $lab" 2
+  fi
+  echo "PASS down $lab${proj:+ (built images removed)}"
 }
 
 built_images() { # 'image <name> <project>' for every image compose built (it labels them with the project)

@@ -4,7 +4,7 @@
 
 ### Features
 
-- Clean up lab images after a mission, with confirmation. `cyberlab down <lab> --images` also removes the images compose built for that lab, and `cyberlab nuke --images` removes every image built for a cyberlab lab; pulled images and the tools image are never touched. `cyberlab status` now lists those built images too, so it stays the dry run. The skill's hand-off ends by showing the lab's built images and removing them only after the person says yes; a calling skill with nobody to ask keeps them and names them in the report.
+- Clean up lab images after a mission, with confirmation. `cyberlab down <lab> --images` also removes the images compose built for that lab (untagged ones a rebuild left behind included) and says so only when none is left, and `cyberlab nuke --images` removes every image built for a cyberlab lab; pulled images and the tools image are never touched. `cyberlab status` now lists those built images too, so it stays the dry run. The skill's hand-off ends by showing the lab's built images and removing them only after the person says yes; a calling skill with nobody to ask keeps them and names them in the report.
 
 ## v1.3.0 — 2026-11-19
 

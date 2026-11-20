@@ -374,7 +374,7 @@ To reproduce a trace, share the lab directory with it: the document lists the fi
 │   └── docs/README.md          catalog page for the skill
 ├── examples/mmt-workbench/     example consumer, not part of the skill
 ├── assets/logo/                logo SVG variants, PNG exports, brand-showcase.html
-└── tests/                      unit tests for trace_doc.py (python3 -m unittest discover -s tests)
+└── tests/                      unit tests for trace_doc.py and the cyberlab CLI (python3 -m unittest discover -s tests)
 ```
 
 `examples/mmt-workbench/` is an example *consumer* environment: a Linux image with mmt-dpi, mmt-security and mmt-plugin that replays cyberlab traces (`detect.sh`). See [its README](examples/mmt-workbench/README.md).
