@@ -60,7 +60,7 @@ Done when `mission.md` names exactly one goal and one scope, lists every trace t
 
 ## Step 2 — Choose the smallest generator
 
-Apply `references/mission.md` → *Choose the generator*: a **lab** for timing, rate, order, real framing or a real implementation's traffic; **crafted** only for field values with no runnable implementation. A continued lab keeps its generator unless a new trace needs the other kind: then add it to the `Generator:` line with its reason (one mission may hold lab and crafted traces). Done when the brief's `Generator:` line names the generator of every trace and its reason, and a lab's `Server/client:` line names the images.
+Apply `references/mission.md` → *Choose the generator*: a **lab** for timing, rate, order, real framing or a real implementation's traffic; **crafted** only for field values with no runnable implementation. A rule keyed on IP addresses (IoCs) still gets a lab: the generator holds a TEST-NET stand-in for each address on a fake-WAN subnet (`references/lab-authoring.md` → *Fake-WAN addresses*), recorded on the brief's `Stand-ins:` line. A continued lab keeps its generator unless a new trace needs the other kind: then add it to the `Generator:` line with its reason (one mission may hold lab and crafted traces). Done when the brief's `Generator:` line names the generator of every trace and its reason, and a lab's `Server/client:` line names the images.
 
 ## Step 3 — Write the expectations
 
