@@ -11,7 +11,7 @@
 
 ### Documentation
 
-- Document `cyberlab craft <lab> <trace.pcap> --script <generator.py>` as the path for crafted evidence traces (#21). A new *Crafted evidence traces* section in `references/crafted.md` says when to craft instead of using a fake-WAN lab (the literal public address must be in the trace bytes, no runnable implementation, or the consumer asks for synthetic) and which link types verify accepts; gives the exact invocation and why `craft <lab> <trace> -- gen.py` fails; documents the `--script` contract (`$OUT`, standard library only, no network, the provenance sidecar written automatically); and requires every downstream report, including a consuming skill's, to label the trace synthetic. SKILL.md Step 5, `references/mission.md` and the README now show the `--script` form.
+- Document `cyberlab craft <lab> <trace.pcap> --script <generator.py>` as the path for crafted evidence traces (#21). A new *Crafted evidence traces* section in `references/crafted.md` says when to craft instead of using a fake-WAN lab (the literal public address must be in the trace bytes, no runnable implementation, or the consumer asks for synthetic) and which link types verify accepts; gives the exact invocation and why `craft <lab> <trace> -- gen.py` fails; documents the `--script` contract (`$OUT`, standard library only, no network, the provenance sidecar written automatically); and requires every downstream report, including a consuming skill's, to label the trace synthetic. SKILL.md Step 5 and the README show the `--script` form; SKILL.md Steps 2/4 and `references/mission.md` point to the new section.
 
 ## v1.3.0 — 2026-11-19
 
