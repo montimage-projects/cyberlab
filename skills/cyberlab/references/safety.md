@@ -35,4 +35,4 @@ Docker's rule for an internal network drops traffic from the lab bridge to addre
 
 ## Stopping everything
 
-`cyberlab status` lists running lab containers; `cyberlab down <lab>` stops one; `cyberlab nuke` removes every `cyberlab-*` container, network and volume.
+`cyberlab status` lists lab containers, networks, volumes and the images built for labs; `cyberlab down <lab>` stops one (`--images` also removes the images built for it); `cyberlab nuke` removes every `cyberlab-*` container, network and volume (`--images`: and every image built for a cyberlab lab). Pulled images and the tools image are never removed. The skill asks before any image removal and before `nuke`.

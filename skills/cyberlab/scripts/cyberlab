@@ -25,10 +25,12 @@
 #   verify <lab> [trace.pcap]...  check traces in <lab>/out against <lab>/expect.json
 #   doc <lab> [trace.pcap]...     (re)write out/<trace>.md: what the trace contains, how it was
 #                                 generated and how to reproduce it (run, craft and verify write it too)
-#   down <lab>                    tear one lab down
-#   status [lab]                  containers, networks and volumes of every cyberlab lab (or one);
-#                                 the dry-run of nuke
-#   nuke                          remove every cyberlab-* container, network and volume
+#   down <lab> [--images]         tear one lab down; --images also removes the images compose
+#                                 built for it (pulled images and the tools image are kept)
+#   status [lab]                  containers, networks, volumes and built images of every cyberlab
+#                                 lab (or one); the dry-run of down --images and nuke
+#   nuke [--images]               remove every cyberlab-* container, network and volume
+#                                 (--images: and every image built for a cyberlab-* lab)
 #
 # Env: CYBERLAB_TOOLS (default cyberlab/tools:local), CYBERLAB_TIMEOUT (generator wait, default
 #      300 s). Exit: 0 ok, 1 usage/environment error, 2 a policy, lab or expectation check failed.
@@ -375,33 +377,69 @@ cmd_doc() { # <lab> [trace.pcap]...: (re)write out/<trace>.md from mission.md, e
 }
 
 cmd_down() {
-  [ $# -eq 1 ] || die "usage: cyberlab down <lab>"
-  need_lab "$1"; need_docker
-  (cd "$1" && docker compose down -v --remove-orphans) || die "docker compose down failed in $1." 2
-  echo "PASS down $1"
+  local lab="" rmi=() proj="" left
+  while [ $# -gt 0 ]; do case "$1" in --images) rmi=(--rmi local); shift;; -*) die "down: unknown option '$1'.";; *) [ -z "$lab" ] || die "usage: cyberlab down <lab> [--images]"; lab="$1"; shift;; esac; done
+  [ -n "$lab" ] || die "usage: cyberlab down <lab> [--images]"
+  need_lab "$lab"; need_docker
+  if [ "${#rmi[@]}" -gt 0 ]; then   # read the project name before anything is removed: the image check below needs it
+    need_tools; proj="$(project_of "$(abspath "$lab")")"
+    case "$proj" in cyberlab-*) ;; *) die "cannot read the lab's project name (got '$proj'); nothing was removed." 2;; esac
+  fi
+  # --rmi local removes only the images compose built for this lab, never pulled ones
+  (cd "$lab" && docker compose down -v --remove-orphans ${rmi[@]+"${rmi[@]}"}) || die "docker compose down failed in $lab." 2
+  if [ -n "$proj" ]; then
+    # Compose before v5.5.1 keeps the untagged images a rebuild left behind: remove what the project still labels
+    left="$(docker image ls -aq --filter "label=com.docker.compose.project=$proj" | sort -u)"
+    # shellcheck disable=SC2086
+    [ -z "$left" ] || docker image rm $left >/dev/null 2>&1
+    left="$(docker image ls -aq --filter "label=com.docker.compose.project=$proj" | sort -u)"
+    [ -z "$left" ] || die "down: $(echo "$left" | wc -l | tr -d ' ') image(s) built for $proj could not be removed: $(printf '%s' "$left" | tr '\n' ' '). The rest of the lab is down; check: cyberlab status $lab" 2
+  fi
+  echo "PASS down $lab${proj:+ (built images removed)}"
 }
 
-cmd_status() { # [lab]: containers, networks and volumes of cyberlab labs (or of one lab)
+built_images() { # 'image <name> <project>' for every image compose built (it labels them with the project);
+  # -a: Docker 29+ leaves untagged images out of the default listing
+  local ids; ids="$(docker image ls -aq --filter label=com.docker.compose.project | sort -u)"
+  [ -n "$ids" ] || return 0
+  # shellcheck disable=SC2086
+  docker image inspect -f 'image {{if .RepoTags}}{{index .RepoTags 0}}{{else}}{{.Id}}{{end}} {{index .Config.Labels "com.docker.compose.project"}}' $ids 2>/dev/null
+}
+cmd_status() { # [lab]: containers, networks, volumes and built images of cyberlab labs (or of one lab)
   need_docker
   local want='^cyberlab-'
   if [ $# -ge 1 ]; then need_lab "$1"; need_tools; want="^$(project_of "$(abspath "$1")")\$"; fi
-  local rows
+  local rows imgs
   rows="$( { docker ps -a --format 'container {{.Names}} {{.Label "com.docker.compose.project"}}';
              docker network ls --format 'network {{.Name}} {{.Label "com.docker.compose.project"}}';
              docker volume ls --format 'volume {{.Name}} {{.Label "com.docker.compose.project"}}'; } |
            awk -v w="$want" 'NF>=3 && $NF ~ w')"
-  if [ -n "$rows" ]; then echo "$rows"; else echo "no cyberlab lab resources"; fi
+  imgs="$(built_images | awk -v w="$want" 'NF>=3 && $NF ~ w')"
+  [ -n "$rows" ] && echo "$rows"
+  [ -n "$imgs" ] && echo "$imgs"
+  if [ -z "$rows$imgs" ]; then echo "no cyberlab lab resources"
+  elif [ -z "$rows" ]; then
+    echo "NOTE no container, network or volume left; $(echo "$imgs" | wc -l | tr -d ' ') built image(s) kept for reruns (down <lab> --images or nuke --images removes them)"
+  fi
 }
 
 cmd_nuke() {
+  local images=0
+  while [ $# -gt 0 ]; do case "$1" in --images) images=1; shift;; *) die "nuke: unknown option '$1'. Usage: cyberlab nuke [--images]";; esac; done
   need_docker
-  local projs p
-  projs="$( { docker ps -a --format '{{.Label "com.docker.compose.project"}}'; docker network ls --format '{{.Label "com.docker.compose.project"}}'; docker volume ls --format '{{.Label "com.docker.compose.project"}}'; } | grep '^cyberlab-' | sort -u)"
+  local projs p ids
+  projs="$( { docker ps -a --format '{{.Label "com.docker.compose.project"}}'; docker network ls --format '{{.Label "com.docker.compose.project"}}'; docker volume ls --format '{{.Label "com.docker.compose.project"}}';
+              [ "$images" = 1 ] && built_images | awk '{print $NF}'; } | grep '^cyberlab-' | sort -u)"
   [ -n "$projs" ] || { echo "PASS nuke: nothing to remove"; return 0; }
   for p in $projs; do
     docker ps -aq --filter "label=com.docker.compose.project=$p" | xargs docker rm -f >/dev/null 2>&1
     docker network ls -q --filter "label=com.docker.compose.project=$p" | xargs docker network rm >/dev/null 2>&1
     docker volume ls -q --filter "label=com.docker.compose.project=$p" | xargs docker volume rm >/dev/null 2>&1
+    if [ "$images" = 1 ]; then
+      ids="$(docker image ls -aq --filter "label=com.docker.compose.project=$p" | sort -u)"
+      # shellcheck disable=SC2086
+      [ -z "$ids" ] || docker image rm -f $ids >/dev/null 2>&1
+    fi
     echo "removed $p"
   done
   echo "PASS nuke"
@@ -411,7 +449,7 @@ c="${1:-}"; [ $# -gt 0 ] && shift
 case "$c" in
   doctor) cmd_doctor "$@";; build) cmd_build "$@";; templates) cmd_templates;; labs) cmd_labs "$@";; new) cmd_new "$@";;
   check) cmd_check "$@";; run) cmd_run "$@";; craft) cmd_craft "$@";; verify) cmd_verify "$@";; doc) cmd_doc "$@";;
-  down) cmd_down "$@";; status) cmd_status "$@";; nuke) cmd_nuke;;
+  down) cmd_down "$@";; status) cmd_status "$@";; nuke) cmd_nuke "$@";;
   -h|--help|help) usage;;
   "") usage; exit 1;;
   *) die "unknown command '$c'. Run 'cyberlab --help'.";;
