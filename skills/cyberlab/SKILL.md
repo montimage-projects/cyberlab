@@ -3,7 +3,7 @@ name: cyberlab
 description: "Set up a minimal isolated lab per mission (one task) and return verified traces: attack/benign pcaps, protocol captures, synthetic pcaps; reuse it for more traces of that task. Don't use for writing rules, live pentests, or analyzing pcaps."
 license: Apache-2.0
 metadata:
-  version: 1.3.0
+  version: 1.4.0
   author: "Luong NGUYEN <luongnv89@users.noreply.github.com>"
 ---
 

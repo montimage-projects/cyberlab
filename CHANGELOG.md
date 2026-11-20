@@ -2,16 +2,21 @@
 
 ## Unreleased
 
+## v1.4.0 — 2026-11-20
+
 ### Features
 
 - Fake-WAN addresses for IP-IoC rules (#20). A lab network may declare one `ipam` subnet inside a TEST-NET range (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) and pin `ipv4_address` values in it, so the generator holds a fixed stand-in for an IoC address and the trace is a real lab capture instead of a crafted one. The network stays `internal: true` with `inhibit_ipv4`. The policy rejects any other subnet (public, private, loopback, link-local, multicast), a second pool, IPv6 pools, IPAM drivers and options, a gateway or `ip_range` outside the subnet, and a pinned address outside its pool or on a network without one.
   - Real subnets stay forbidden: Docker's internal-network rule drops only traffic to off-subnet addresses, and on Docker Desktop the VM routed an unheld in-subnet address out of its uplink, so a public lab subnet could reach the real hosts of an IoC range. TEST-NET ranges are not routed (`references/safety.md`).
   - The brief gets an optional `Stand-ins:` line mapping each stand-in to its IoC, shown in the trace document; the provenance records each service's pinned address, and the document says pinned addresses stay the same between runs.
-- Clean up lab images after a mission, with confirmation. `cyberlab down <lab> --images` also removes the images compose built for that lab (untagged ones a rebuild left behind included) and says so only when none is left, and `cyberlab nuke --images` removes every image built for a cyberlab lab; pulled images and the tools image are never touched. `cyberlab status` now lists those built images too, so it stays the dry run. The skill's hand-off ends by showing the lab's built images and removing them only after the person says yes; a calling skill with nobody to ask keeps them and names them in the report.
+- Clean up lab images after a mission, with confirmation (#22). `cyberlab down <lab> --images` also removes the images compose built for that lab (untagged ones a rebuild left behind included) and says so only when none is left, and `cyberlab nuke --images` removes every image built for a cyberlab lab; pulled images and the tools image are never touched. `cyberlab status` now lists those built images too, so it stays the dry run. The skill's hand-off ends by showing the lab's built images and removing them only after the person says yes; a calling skill with nobody to ask keeps them and names them in the report.
 
 ### Documentation
 
 - Document `cyberlab craft <lab> <trace.pcap> --script <generator.py>` as the path for crafted evidence traces (#21). A new *Crafted evidence traces* section in `references/crafted.md` says when to craft instead of using a fake-WAN lab (the literal public address must be in the trace bytes, no runnable implementation, or the consumer asks for synthetic) and which link types verify accepts; gives the exact invocation and why `craft <lab> <trace> -- gen.py` fails; documents the `--script` contract (`$OUT`, standard library only, no network, the provenance sidecar written automatically); and requires every downstream report, including a consuming skill's, to label the trace synthetic. SKILL.md Step 5 and the README show the `--script` form; SKILL.md Steps 2/4 and `references/mission.md` point to the new section.
+- Lead the README with a ready-to-send agent prompt: one message that installs the skill (`npx skills add … --skill cyberlab -g -y`) and asks for an FTP brute-force attack and benign trace with exact counts, followed by what the agent returns. A new *Write your own prompt* section gives a fill-in-the-brackets template and three examples (HTTP/2 Rapid Reset, a Redis capture for a parser, a crafted CoAP trace); the Quick start install uses `-g -y` and points to both prompts. The skill's own README (`skills/cyberlab/docs/README.md`) shows the same prompt and template.
+
+**Full Changelog**: https://github.com/montimage-projects/cyberlab/compare/v1.3.0...v1.4.0
 
 ## v1.3.0 — 2026-11-19
 

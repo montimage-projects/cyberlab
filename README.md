@@ -65,7 +65,7 @@ cyberlab run ~/labs/ftp attack                  # writes ~/labs/ftp/out/attack.p
 cyberlab run ~/labs/ftp benign                  # writes ~/labs/ftp/out/benign.pcap
 ```
 
-Each `run` checks the isolation policy, starts the lab, captures, tears it down and verifies the trace against the template's `expect.json`. It prints one `PASS`/`FAIL` line per check, then `RESULT PASS`, and writes the trace's document, `out/<mode>.md`. A template has no `mission.md`, so `doc` adds a `WARN doc` line saying the document has no description: the trace itself passed. The first run builds the template's images. `cyberlab status ~/labs/ftp` confirms nothing is left running. All commands: [Usage and CLI reference](#usage-and-cli-reference).
+Each `run` checks the isolation policy, starts the lab, captures, tears it down and verifies the trace against the template's `expect.json`. It prints one `PASS`/`FAIL` line per check, then `RESULT PASS`, and writes the trace's document, `out/<mode>.md`. A template has no `mission.md`, so `doc` adds a `WARN doc` line saying the document has no description: the trace itself passed. The first run builds the template's images. `cyberlab status ~/labs/ftp` confirms nothing is left running and lists the images the run built; `cyberlab down ~/labs/ftp --images` removes them when you are done. All commands: [Usage and CLI reference](#usage-and-cli-reference).
 
 ## Write your own prompt
 
@@ -198,11 +198,13 @@ Crafted traces skip the lab network entirely: `cyberlab craft` runs `craft_pcap.
 | Expectations first | Counts, time windows, distinct values and spacing checked before a trace counts |
 | Isolation checked three times | Compose policy before start, running containers, and teardown |
 | Crafted traces | Real Ethernet/IP/TCP/UDP headers around your payload, labelled synthetic |
+| Stand-ins for IoC addresses | A rule keyed on known bad IP addresses gets a real lab capture: lab hosts hold fixed TEST-NET stand-ins, and each trace document maps them to the real addresses |
 | Attack mechanism | `mechanism.md` per lab: who is who, sequence diagrams, checked links to CVE, RFC, ATT&CK |
 | Who is who | Each trace document opens with the attacker, the victim and every other address, recorded from Docker while the lab ran |
 | Diagrams first | Mermaid diagrams of each trace: hosts, the exchange, traffic over time, protocol mix |
 | Output where you work | The agent asks where to store the lab; the default is the directory you invoked it from |
 | Provenance and reproduction | `<trace>.provenance.json` and `<trace>.md` for every trace |
+| Cleanup with confirmation | `cyberlab status` lists the images a lab built; `down <lab> --images` removes them, and the agent asks before it does |
 | Host needs only Docker | tcpdump, tshark and Python run in the tools image |
 
 ## Templates
@@ -221,9 +223,9 @@ All five run end to end.
 
 | When | What is checked |
 |---|---|
-| Before start | Allowlist on the resolved compose file: internal networks whose bridge gives the host no address, no published ports, no privileged or host namespaces, capabilities limited to NET_RAW/NET_ADMIN, no engine socket, bind mounts inside the lab, no restart policies, a capture that only tcpdump can write |
+| Before start | Allowlist on the resolved compose file: internal networks whose bridge gives the host no address, a custom subnet only inside a TEST-NET range, no published ports, no privileged or host namespaces, capabilities limited to NET_RAW/NET_ADMIN, no engine socket, bind mounts inside the lab, no restart policies, a capture that only tcpdump can write |
 | While running | Networks internal, no ports, not privileged |
-| After teardown | Nothing left |
+| After teardown | No container or network left (built images stay until `down <lab> --images`) |
 
 Escape tests from inside a lab (public IPs, DNS, `host.docker.internal`, every TCP port the host listens on) were all blocked on macOS (Docker Desktop, arm64) and Ubuntu 24.04 (Docker Engine, arm64). On Linux, `internal: true` alone still let a lab reach the host's own services through the bridge gateway; the required `com.docker.network.bridge.inhibit_ipv4` option closes that. Isolation is Docker-level, not a VM: see [`references/safety.md`](skills/cyberlab/references/safety.md).
 
@@ -245,10 +247,12 @@ You (or a calling agent) say what the lab is for. The skill writes a one-goal mi
 - **Expectations first:** `expect.json` holds tshark filters with bounds per trace: frame or message counts, the most matches in a time window (`window`), distinct field values (`distinct`) and spacing (`gap_min`/`gap_max`), so every claim in the brief, rule thresholds included, is checked. `run` and `craft` refuse a trace that has no expectation, and a trace is done only when its expectations pass.
 - **Isolation checked three times:** an allowlist policy on the compose file before start, the running containers and networks, and the teardown (see [Safety](#safety)).
 - **Crafted traces when no implementation exists:** payloads behind real Ethernet/IP/TCP/UDP headers, written with no network and labelled synthetic.
+- **Stand-ins for IoC addresses:** for a rule keyed on known bad IP addresses, a lab can declare one subnet inside a TEST-NET range (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) and pin a stand-in address for each IoC, so the trace is a real lab capture instead of a crafted one. The brief's `Stand-ins:` line maps each stand-in to its IoC and the trace document shows it; the policy rejects any other subnet ([*Fake-WAN addresses*](skills/cyberlab/references/lab-authoring.md#fake-wan-addresses)).
 - **Attack mechanism:** each lab has a `mechanism.md` that opens with who is who (attacker, victim, any other host), then shows how the attack (or protocol) works and what each trace holds as Mermaid sequence diagrams with short text, and links to the CVE, RFC, MITRE ATT&CK or vendor write-up. Every template ships one.
 - **Who is who, with addresses:** `cyberlab run` records the address Docker gave each lab service while the lab runs, so each trace document can say which IP address is the attacker and which the victim before any detail. Crafted traces name their addresses in `mechanism.md`.
 - **Provenance and reproduction:** each trace gets an `out/<trace>.provenance.json` (origin, frames, sha256, the exact command, images with registry digests, the service addresses, the sha256 of every lab file) and an `out/<trace>.md` that shows who is who, the exchange as diagrams, how the attack works, how it was generated and how someone else reproduces it.
 - **Output where you work:** the agent asks where to store the lab and its traces; with no answer (or when another skill calls it) the lab goes in the directory it was invoked from.
+- **Cleanup with confirmation:** `cyberlab status` lists the images built for a lab next to its containers, networks and volumes; `cyberlab down <lab> --images` (or `cyberlab nuke --images` for every lab) removes them, never pulled images or the tools image. The agent shows them at the end of a mission and removes them only after you say yes; a calling skill with nobody to ask keeps them and names them in its report.
 - **Host needs only Docker:** every check runs in a small tools image (tcpdump, tshark, Python).
 
 </details>
@@ -322,7 +326,7 @@ When to use a `--script`, its contract (`$OUT`, standard library only, provenanc
 
 A lab directory holds `mission.md` (with a `## Log` of each request), `mechanism.md`, `expect.json`, the lab files and `out/`: the traces, one `<trace>.provenance.json` and one `<trace>.md` each, the generator log and `verify.json`.
 
-`out/<trace>.provenance.json` records the origin, frames, sha256, the exact command, images with registry digests, the address of each lab service during the run, and the sha256 of every lab file.
+`out/<trace>.provenance.json` records the origin, frames, sha256, the exact command, images with registry digests, the address of each lab service during the run (and its pinned `ipv4_address` in a fake-WAN lab), and the sha256 of every lab file.
 
 `<trace>.md` is the trace's document, written from the brief, `mechanism.md`, the expectations, the verification result, the provenance and tshark summaries of the trace. It explains with Mermaid diagrams first and text second:
 
@@ -335,12 +339,12 @@ flowchart LR
     G --> R["How to reproduce"]
 ```
 
-- **Who is who:** every address in the trace with its role (attacker or client, victim or server, other), its MAC, lab service and image, and the frames it sent and received, as a table and a flowchart. Lab captures take the addresses Docker gave each service during the run; crafted traces take them from `craft_pcap.py` or a `Roles:` line in `mechanism.md`. When neither exists, the document only says which host spoke first, and `doc` warns.
+- **Who is who:** every address in the trace with its role (attacker or client, victim or server, other), its MAC, lab service and image, and the frames it sent and received, as a table and a flowchart. Lab captures take the addresses Docker gave each service during the run, and say which ones a fake-WAN lab pins in `docker-compose.yml`; crafted traces take them from `craft_pcap.py` or a `Roles:` line in `mechanism.md`. When neither exists, the document only says which host spoke first, and `doc` warns.
 - **What it contains:** the brief's description; a sequence diagram of the first 30 frames that carry the exchange (payloads, non-TCP frames, connection openings and resets; in a trace without payloads, all but pure ACKs), a chart of frames over time and a pie of protocols; the protocol hierarchy, conversations and first 40 packets in a folded block.
 - **Mechanism:** who is who, how the attack or protocol works, what this trace shows of it (with its diagrams), and the references, from `mechanism.md`. Every template ships one.
 - **What was checked:** the trace's expectations and the last verification result.
-- **How it was generated:** the command, `MODE`/`PCAP`, the resolved lab services, image IDs, registry digests and Dockerfile base images, tool and Docker versions, and the sha256 of every lab file (with a flag on any file changed since).
-- **How to reproduce:** the steps, and what "the same" means. A trace crafted with `craft_pcap.py` reproduces byte for byte (same sha256). A lab capture reproduces as an equivalent trace that passes the same expectations but is never the same file: timestamps, TCP sequence numbers, client ports and container addresses change on every run.
+- **How it was generated:** the command, `MODE`/`PCAP`, the resolved lab services, the brief's `Stand-ins:` mapping (fake-WAN labs), image IDs, registry digests and Dockerfile base images, tool and Docker versions, and the sha256 of every lab file (with a flag on any file changed since).
+- **How to reproduce:** the steps, and what "the same" means. A trace crafted with `craft_pcap.py` reproduces byte for byte (same sha256). A lab capture reproduces as an equivalent trace that passes the same expectations but is never the same file: timestamps, TCP sequence numbers, client ports and the container addresses Docker assigns change on every run (addresses pinned in a fake-WAN lab stay the same).
 
 To reproduce a trace, share the lab directory with it: the document lists the files that directory must hold.
 
@@ -389,9 +393,9 @@ To reproduce a trace, share the lab directory with it: the document lists the fi
 
 - [`skills/cyberlab/SKILL.md`](skills/cyberlab/SKILL.md): the workflow the agent follows
 - [`skills/cyberlab/references/mission.md`](skills/cyberlab/references/mission.md): mission brief, choosing the generator, `expect.json` format
-- [`skills/cyberlab/references/lab-authoring.md`](skills/cyberlab/references/lab-authoring.md): the lab contract, adapting a template, failures seen before
+- [`skills/cyberlab/references/lab-authoring.md`](skills/cyberlab/references/lab-authoring.md): the lab contract, adapting a template, fake-WAN addresses, failures seen before
 - [`skills/cyberlab/references/crafted.md`](skills/cyberlab/references/crafted.md): crafted (synthetic) traces, including *Crafted evidence traces* (`craft --script`)
-- [`skills/cyberlab/references/safety.md`](skills/cyberlab/references/safety.md): threat model and payload rules
+- [`skills/cyberlab/references/safety.md`](skills/cyberlab/references/safety.md): threat model, why fake-WAN subnets are TEST-NET only, payload rules
 - [`skills/cyberlab/docs/README.md`](skills/cyberlab/docs/README.md): skill overview
 - [`examples/mmt-workbench/README.md`](examples/mmt-workbench/README.md): replaying traces with MMT
 

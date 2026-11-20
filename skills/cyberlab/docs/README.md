@@ -28,9 +28,11 @@ For another attack or protocol, fill in the template under [Usage](#usage).
 
 - One mission, one task: attack and benign pcaps for a detection rule, or captures of a protocol for a parser, with as many traces as the task needs. Later work on the same task reuses the lab (`cyberlab labs` finds it); an unrelated task gets a new one.
 - Minimal labs: one victim, one generator, one capture sidecar; no IDS or DPI inside — consumers replay the traces with their own tools.
-- Safety checked three times: an allowlist policy on the compose file (internal network, no host address on the bridge), the running containers and network, and the teardown.
+- Safety checked three times: an allowlist policy on the compose file (internal network, no host address on the bridge, a custom subnet only inside a TEST-NET range), the running containers and network, and the teardown.
 - Expectations first: tshark filters in `expect.json` with bounds on counts, the most matches in a time window, distinct values and spacing; a trace is done only when they pass.
+- Stand-ins for IoC addresses: a rule keyed on known bad IP addresses gets a real lab capture; lab hosts hold fixed TEST-NET stand-ins (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`), and each trace document maps them to the real addresses.
 - Output where you work: the agent asks where to store the lab and its traces, and defaults to the directory you invoked it from.
+- Cleanup with confirmation: `cyberlab status` lists the images a lab built; the agent offers to remove them at the end of a mission (`cyberlab down <lab> --images`) and does so only after you say yes. Pulled images and the tools image are never removed.
 - Diagrams before text: every trace document opens with who is who (the attacker and the victim, with their IP addresses as captured) and draws the exchange, the traffic over time and the protocol mix as Mermaid diagrams; `mechanism.md` explains the attack with sequence diagrams.
 - Host needs only Docker (validated on macOS arm64 Docker Desktop and Ubuntu 24.04 arm64; Windows not yet run); crafted synthetic traces need no network at all.
 
@@ -41,6 +43,7 @@ For another attack or protocol, fill in the template under [Usage](#usage).
 | "Give me attack and benign pcaps for an FTP brute-force rule" | Build the ftp-bruteforce lab, run both modes, verify, hand off |
 | "Capture Redis traffic in both directions for my parser" | Build a protocol-capture lab with the real server and client |
 | "No implementation exists, here are the message bytes" | Craft a synthetic trace with `cyberlab craft`, labelled synthetic |
+| "Traces for a rule that matches these known bad IP addresses" | Build a fake-WAN lab with a TEST-NET stand-in pinned for each address, mapped in the trace documents |
 | "Called by mmt-security-rule-generator / mmt-plugin-generator" | Derive the mission from the caller's request without questions |
 
 ## How It Works
@@ -105,4 +108,4 @@ With the skill installed, the request alone is enough, or the slash form in Clau
 
 ## Output
 
-A lab directory, in the directory you invoked the skill from unless you name another, with `mission.md`, `mechanism.md` (who is who and Mermaid diagrams of the attack), `expect.json`, the lab files and `out/`: the traces, one `<trace>.md` document and one `<trace>.provenance.json` each (origin, images, service addresses, frames, sha256), the generator log and `verify.json`; plus a short hand-off report (Result, Who, Traces, Lab, Evidence, Uncertainty, Decision).
+A lab directory, in the directory you invoked the skill from unless you name another, with `mission.md`, `mechanism.md` (who is who and Mermaid diagrams of the attack), `expect.json`, the lab files and `out/`: the traces, one `<trace>.md` document and one `<trace>.provenance.json` each (origin, images, service addresses, frames, sha256), the generator log and `verify.json`; plus a short hand-off report (Result, Who, Traces, Lab, Evidence, Uncertainty, Decision) that lists the lab's built images and offers to remove them.
