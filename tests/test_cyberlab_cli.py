@@ -2,10 +2,12 @@
 
 Run from the repo root: python3 -m unittest discover -s tests
 A case puts tests/fake_docker.sh on PATH as `docker`: it logs every call to <state>/log and answers
-from fixture files <state>/{containers,networks,volumes,images} (<id> <name|-> <project>), mutating
+from fixture files <state>/{containers,networks,volumes,images} (<id> <name|-> <project|->), mutating
 `images` on `compose down --rmi` (Compose before v5.5.1: only the project's tagged images go) and on
-`image rm`. Assertions are on exact log lines present or absent, never on whole-log equality (GNU
-xargs runs once on empty input, BSD xargs does not). Each case runs once per bash found."""
+`image rm`. The fake hides untagged images (name `-`) from `image ls` unless `-a`/`--all`, as the
+Docker 29+ CLI does; `-` as project stands for an image without a compose label. Assertions are on
+exact log lines present or absent, never on whole-log equality (GNU xargs runs once on empty input,
+BSD xargs does not). Each case runs once per bash found."""
 import os
 import shutil
 import subprocess
@@ -24,9 +26,13 @@ F1 = {
 }
 F2 = {
     "images": "i1 cyberlab-a-victim:latest cyberlab-a\ni2 - cyberlab-a\n"
-              "i3 cyberlab-ab-victim:latest cyberlab-ab\ni9 otherproj-web:latest otherproj\n",
+              "i3 cyberlab-ab-victim:latest cyberlab-ab\ni9 otherproj-web:latest otherproj\n"
+              "p1 python:3.12-slim -\nt1 cyberlab/tools:local -\n",
 }
-FIXTURES = {"F0": {}, "F1": F1, "F2": F2, "F3": {**F1, **F2}}
+FIXTURES = {
+    "F0": {}, "F1": F1, "F2": F2, "F3": {**F1, **F2},
+    "FU": {"images": "i2 - cyberlab-a\np1 python:3.12-slim -\nt1 cyberlab/tools:local -\n"},
+}
 
 RESOURCE_ROWS = ["container cyberlab-a-victim-1 cyberlab-a",
                  "network cyberlab-a_labnet cyberlab-a",
@@ -206,13 +212,15 @@ class CyberlabCli(unittest.TestCase):
                 for line in self.rm_lines(log):
                     self.assertNotIn("i3", line.split())
                     self.assertNotIn("i9", line.split())
+                    self.assertNotIn("p1", line.split())
+                    self.assertNotIn("t1", line.split())
                 self.assertEqual("PASS down %s (built images removed)" % self.labA,
                                  out.splitlines()[-1])
                 left = self.images()
                 self.assertFalse(any(l.split()[-1] == "cyberlab-a" for l in left), left)
                 ids = [l.split()[0] for l in left]
-                self.assertIn("i3", ids)
-                self.assertIn("i9", ids)
+                for kept in ("i3", "i9", "p1", "t1"):
+                    self.assertIn(kept, ids)
         self.each_bash(check)
 
     def test_down_images_reports_what_is_left(self):
@@ -292,9 +300,16 @@ class CyberlabCli(unittest.TestCase):
             for line in self.rm_lines(log):
                 self.assertNotIn("i9", line.split())
                 self.assertNotIn("n9", line.split())
+                self.assertNotIn("p1", line.split())
+                self.assertNotIn("t1", line.split())
             self.assertIn("removed cyberlab-a", out)
             self.assertIn("removed cyberlab-ab", out)
             self.assertIn("PASS nuke", out)
+            left = self.images()
+            self.assertFalse(any(l.split()[-1].startswith("cyberlab-") for l in left), left)
+            ids = [l.split()[0] for l in left]
+            for kept in ("i9", "p1", "t1"):
+                self.assertIn(kept, ids)
         self.each_bash(check)
 
     def test_nuke_images_only_left(self):
@@ -311,6 +326,36 @@ class CyberlabCli(unittest.TestCase):
             self.assertIn("image rm -f i3", log)
             for line in self.rm_lines(log):
                 self.assertNotIn("i9", line.split())
+                self.assertNotIn("p1", line.split())
+                self.assertNotIn("t1", line.split())
+            left = self.images()
+            self.assertFalse(any(l.split()[-1].startswith("cyberlab-") for l in left), left)
+            ids = [l.split()[0] for l in left]
+            for kept in ("i9", "p1", "t1"):
+                self.assertIn(kept, ids)
+        self.each_bash(check)
+
+    def test_status_untagged_image_only(self):
+        def check(bash):
+            self.fixture("FU")
+            rc, out, err, log = self.cli(bash, ["status"])
+            self.assertEqual(0, rc, err)
+            lines = out.splitlines()
+            self.assertEqual("image sha256:i2 cyberlab-a", lines[0])
+            self.assertEqual(2, len(lines))
+            self.assertTrue(lines[1].startswith(
+                "NOTE no container, network or volume left; 1 built image(s) kept"), out)
+        self.each_bash(check)
+
+    def test_nuke_images_untagged_image_only(self):
+        def check(bash):
+            self.fixture("FU")
+            rc, out, err, log = self.cli(bash, ["nuke", "--images"])
+            self.assertEqual(0, rc, err)
+            self.assertIn("image rm -f i2", log)
+            self.assertIn("removed cyberlab-a", out)
+            self.assertIn("PASS nuke", out)
+            self.assertEqual(["p1 python:3.12-slim -", "t1 cyberlab/tools:local -"], self.images())
         self.each_bash(check)
 
     def test_nuke_nothing(self):

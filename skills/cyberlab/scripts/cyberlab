@@ -389,17 +389,18 @@ cmd_down() {
   (cd "$lab" && docker compose down -v --remove-orphans ${rmi[@]+"${rmi[@]}"}) || die "docker compose down failed in $lab." 2
   if [ -n "$proj" ]; then
     # Compose before v5.5.1 keeps the untagged images a rebuild left behind: remove what the project still labels
-    left="$(docker image ls -q --filter "label=com.docker.compose.project=$proj" | sort -u)"
+    left="$(docker image ls -aq --filter "label=com.docker.compose.project=$proj" | sort -u)"
     # shellcheck disable=SC2086
     [ -z "$left" ] || docker image rm $left >/dev/null 2>&1
-    left="$(docker image ls -q --filter "label=com.docker.compose.project=$proj" | sort -u)"
+    left="$(docker image ls -aq --filter "label=com.docker.compose.project=$proj" | sort -u)"
     [ -z "$left" ] || die "down: $(echo "$left" | wc -l | tr -d ' ') image(s) built for $proj could not be removed: $(printf '%s' "$left" | tr '\n' ' '). The rest of the lab is down; check: cyberlab status $lab" 2
   fi
   echo "PASS down $lab${proj:+ (built images removed)}"
 }
 
-built_images() { # 'image <name> <project>' for every image compose built (it labels them with the project)
-  local ids; ids="$(docker image ls -q --filter label=com.docker.compose.project | sort -u)"
+built_images() { # 'image <name> <project>' for every image compose built (it labels them with the project);
+  # -a: Docker 29+ leaves untagged images out of the default listing
+  local ids; ids="$(docker image ls -aq --filter label=com.docker.compose.project | sort -u)"
   [ -n "$ids" ] || return 0
   # shellcheck disable=SC2086
   docker image inspect -f 'image {{if .RepoTags}}{{index .RepoTags 0}}{{else}}{{.Id}}{{end}} {{index .Config.Labels "com.docker.compose.project"}}' $ids 2>/dev/null
@@ -435,7 +436,7 @@ cmd_nuke() {
     docker network ls -q --filter "label=com.docker.compose.project=$p" | xargs docker network rm >/dev/null 2>&1
     docker volume ls -q --filter "label=com.docker.compose.project=$p" | xargs docker volume rm >/dev/null 2>&1
     if [ "$images" = 1 ]; then
-      ids="$(docker image ls -q --filter "label=com.docker.compose.project=$p" | sort -u)"
+      ids="$(docker image ls -aq --filter "label=com.docker.compose.project=$p" | sort -u)"
       # shellcheck disable=SC2086
       [ -z "$ids" ] || docker image rm -f $ids >/dev/null 2>&1
     fi

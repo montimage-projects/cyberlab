@@ -2,9 +2,16 @@
 # fake docker for tests/test_cyberlab_cli.py: never talks to a real daemon. Every call is logged to
 # $STUB_DIR/log (one argv per line) and answered from fixture files in $STUB_DIR:
 #   containers : <id> <name> <project>      networks : <id> <name> <project>
-#   volumes    : <name> <project>           images   : <id> <name|-> <project>   ("-" = untagged)
-# A missing file means "none". `compose down --rmi` and `image rm` rewrite the images file, so a test
-# can assert what is left.
+#   volumes    : <name> <project>           images   : <id> <name|-> <project|->
+# ("-" as name = untagged; "-" as project = an image with no compose project label, e.g. a pulled
+# image or the tools image). A missing file means "none". `compose down --rmi` and `image rm`
+# rewrite the images file, so a test can assert what is left.
+# `image ls` behaves like Docker 29+: untagged records (name "-") are listed only when the args
+# include -a, --all or a short-flag cluster containing a (e.g. -aq); a key-only
+# `--filter label=com.docker.compose.project` keeps only records whose project is not "-";
+# `--filter label=com.docker.compose.project=<p>` keeps only that project's records; no label
+# filter lists everything subject to the -a rule. `image inspect -f` prints an empty project for
+# records whose project is "-".
 # Env switches:
 #   STUB_PROJECT (default cyberlab-a): the project `compose config` reports; `compose down --rmi`
 #     deletes only this project's TAGGED image records (name != "-"), keeping untagged ones — the
@@ -62,11 +69,14 @@ case "$1" in
   image)
     case "$2" in
       ls) p="$(proj_filter "$@")"
-          if [ -n "$p" ]; then fx images | awk -v p="$p" '$3==p{print $1}'; else fx images | awk '{print $1}'; fi;;
+          a=0; for arg in "$@"; do case "$arg" in --all) a=1;; --*) ;; -*a*) a=1;; esac; done
+          kf=0; has label=com.docker.compose.project "$@" && kf=1
+          fx images | awk -v p="$p" -v a="$a" -v kf="$kf" \
+            '($2 != "-" || a) && (p != "" ? $3 == p : (kf ? $3 != "-" : 1)) {print $1}';;
       inspect)
           if has -f "$@"; then
             shift 2; [ "$1" = "-f" ] && shift 2
-            for id in "$@"; do fx images | awk -v id="$id" '$1==id{print "image", ($2=="-" ? "sha256:" $1 : $2), $3}'; done
+            for id in "$@"; do fx images | awk -v id="$id" '$1==id{print "image", ($2=="-" ? "sha256:" $1 : $2), ($3=="-" ? "" : $3)}'; done
           elif [ "${STUB_NO_TOOLS:-0}" = 1 ]; then exit 1
           else exit 0; fi;;
       rm)
