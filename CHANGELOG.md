@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Features
+
+- Fake-WAN addresses for IP-IoC rules (#20). A lab network may declare one `ipam` subnet inside a TEST-NET range (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) and pin `ipv4_address` values in it, so the generator holds a fixed stand-in for an IoC address and the trace is a real lab capture instead of a crafted one. The network stays `internal: true` with `inhibit_ipv4`. The policy rejects any other subnet (public, private, loopback, link-local, multicast), a second pool, IPv6 pools, IPAM drivers and options, a gateway or `ip_range` outside the subnet, and a pinned address outside its pool or on a network without one.
+  - Real subnets stay forbidden: Docker's internal-network rule drops only traffic to off-subnet addresses, and on Docker Desktop the VM routed an unheld in-subnet address out of its uplink, so a public lab subnet could reach the real hosts of an IoC range. TEST-NET ranges are not routed (`references/safety.md`).
+  - The brief gets an optional `Stand-ins:` line mapping each stand-in to its IoC, shown in the trace document; the provenance records each service's pinned address, and the document says pinned addresses stay the same between runs.
+
 ## v1.3.0 — 2026-11-19
 
 ### Features

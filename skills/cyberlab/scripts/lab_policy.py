@@ -12,7 +12,11 @@ explicitly allowed:
   top level   name (cyberlab-*), services, networks, volumes (named, lab-owned)
   networks    driver bridge, internal: true, driver_opts exactly
               com.docker.network.bridge.inhibit_ipv4: "true" (the host gets no address on the lab
-              bridge, so host services are unreachable), name <project>_<key>, empty ipam, labels
+              bridge, so host services are unreachable), name <project>_<key>, labels, and ipam
+              either empty or a fake-WAN pool: driver default, one config entry with subnet
+              (inside a TEST-NET range: 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) and
+              optionally gateway / ip_range inside it, no options. Pinned ipv4_address values
+              must sit inside their network's pool.
   services    image, build (context inside the lab; dockerfile, args, target only), command,
               entrypoint, environment, working_dir, user, depends_on, healthcheck, labels,
               hostname, expose, tmpfs, read_only, init, stop_grace_period, stop_signal, platform,
@@ -27,6 +31,7 @@ Prints one PASS/FAIL/WARN line per check; exits 0 when nothing failed, 2 when a 
 1 on a usage or input error. Symlinks inside the lab are rejected by `cyberlab` before this runs.
 """
 import argparse
+import ipaddress
 import json
 import os
 import sys
@@ -43,6 +48,13 @@ BUILD_KEYS = {"context", "dockerfile", "args", "target"}
 MOUNT_KEYS = {"type", "source", "target", "read_only", "bind", "volume", "tmpfs"}
 NET_OPT_KEYS = {"aliases", "ipv4_address", "ipv6_address"}
 ALLOWED_CAPS = {"NET_RAW", "NET_ADMIN"}
+IPAM_KEYS = {"driver", "config"}
+POOL_KEYS = {"subnet", "gateway", "ip_range"}
+# RFC 5737 documentation ranges: never routed on the internet. A lab bridge forwards traffic for
+# in-subnet addresses no container holds to the host's routing table (Docker's internal-network
+# rule drops only off-subnet destinations), so a public subnet could reach real hosts; these cannot.
+FAKE_WAN = tuple(ipaddress.ip_network(n) for n in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24"))
+FAKE_WAN_TEXT = "192.0.2.0/24, 198.51.100.0/24 or 203.0.113.0/24"
 SOCK_NAMES = ("docker.sock", "containerd.sock", "podman.sock", "crio.sock")
 
 
@@ -71,6 +83,46 @@ def inside(path, roots):
     return any(p == r or p.startswith(r + os.sep) for r in roots)
 
 
+def check_ipam(ipam):
+    """(problems, subnet) for a network's ipam block; subnet is None when the block is empty."""
+    if ipam in (None, {}):
+        return [], None
+    if not isinstance(ipam, dict):
+        return ["ipam is not a mapping"], None
+    problems = []
+    if set(ipam) - IPAM_KEYS:
+        problems.append(f"ipam key(s) {sorted(set(ipam) - IPAM_KEYS)}")
+    if ipam.get("driver", "default") != "default":
+        problems.append(f"ipam driver {ipam.get('driver')}")
+    pools = ipam.get("config") or []
+    if not isinstance(pools, list) or len(pools) != 1 or not isinstance(pools[0], dict):
+        return problems + ["ipam needs exactly one config entry (one subnet)"], None
+    pool = pools[0]
+    if set(pool) - POOL_KEYS:
+        problems.append(f"ipam config key(s) {sorted(set(pool) - POOL_KEYS)}")
+    try:
+        subnet = ipaddress.ip_network(str(pool.get("subnet", "")), strict=True)
+    except ValueError:
+        return problems + [f"ipam subnet '{pool.get('subnet')}' is not a network address such as 203.0.113.0/24"], None
+    if subnet.version != 4 or not any(subnet.subnet_of(n) for n in FAKE_WAN):
+        return problems + [f"ipam subnet {subnet} is outside the TEST-NET ranges ({FAKE_WAN_TEXT})"], None
+    if "gateway" in pool:
+        try:
+            gw = ipaddress.ip_address(str(pool["gateway"]))
+            if gw not in subnet:
+                problems.append(f"ipam gateway {gw} is outside {subnet}")
+        except ValueError:
+            problems.append(f"ipam gateway '{pool['gateway']}' is not an IPv4 address")
+    if "ip_range" in pool:
+        try:
+            rng = ipaddress.ip_network(str(pool["ip_range"]), strict=True)
+            if rng.version != 4 or not rng.subnet_of(subnet):
+                problems.append(f"ipam ip_range {rng} is outside {subnet}")
+        except ValueError:
+            problems.append(f"ipam ip_range '{pool['ip_range']}' is not a network address")
+    return problems, (None if problems else subnet)
+
+
 def check_service(name, svc, ctx, r):
     where = f"service {name}"
     before = r.failed
@@ -96,6 +148,8 @@ def check_service(name, svc, ctx, r):
                 r.fail(where, f"uses undeclared network {n}", "declare it under networks: with internal: true")
             if isinstance(spec, dict) and set(spec) - NET_OPT_KEYS:
                 r.fail(where, f"network {n} options {sorted(set(spec) - NET_OPT_KEYS)}", "keep only aliases or a fixed address")
+            if isinstance(spec, dict) and spec.get("ipv4_address") is not None:
+                check_pinned(where, n, spec["ipv4_address"], ctx["subnets"].get(n), r)
     caps = {str(c).upper().removeprefix("CAP_") for c in (svc.get("cap_add") or [])}
     if caps - ALLOWED_CAPS:
         r.fail(where, f"cap_add {','.join(sorted(caps - ALLOWED_CAPS))} is not allowed", "keep cap_add to NET_RAW and NET_ADMIN")
@@ -125,6 +179,20 @@ def check_service(name, svc, ctx, r):
             r.fail(where, f"mount type {typ}", "use bind (inside the lab), volume or tmpfs")
     if r.failed == before:
         r.ok(where)
+
+
+def check_pinned(where, net, addr, subnet, r):
+    fix = f"pin an address inside the network's ipam subnet ({FAKE_WAN_TEXT}), or drop ipv4_address"
+    if subnet is None:
+        r.fail(where, f"pins ipv4_address {addr} on network {net}, which has no valid fake-WAN ipam subnet", fix)
+        return
+    try:
+        ip = ipaddress.ip_address(str(addr))
+    except ValueError:
+        r.fail(where, f"ipv4_address '{addr}' on network {net} is not an IPv4 address", fix)
+        return
+    if ip not in subnet or ip in (subnet.network_address, subnet.broadcast_address):
+        r.fail(where, f"ipv4_address {ip} is not a usable host address of {subnet} (network {net})", fix)
 
 
 def check_runner(services, tools_image, r):
@@ -182,6 +250,7 @@ def main():
                "a lab declares only name, services, networks and volumes")
 
     networks = cfg.get("networks") or {}
+    subnets = {}
     if not networks:
         r.fail("networks", "none declared", f"declare networks: {{ lab: {{ driver: bridge, internal: true, driver_opts: {{ {INHIBIT}: \"true\" }} }} }}")
     for n, spec in networks.items():
@@ -194,8 +263,8 @@ def main():
             problems.append("internal is not true, so containers can reach the host LAN and the internet")
         if spec.get("name", f"{name}_{n}") != f"{name}_{n}":
             problems.append(f"name {spec.get('name')} points at a network outside the lab")
-        if spec.get("ipam") not in (None, {}):
-            problems.append("custom ipam")
+        ipam_problems, subnets[n] = check_ipam(spec.get("ipam"))
+        problems += ipam_problems
         opts = spec.get("driver_opts") or {}
         if str(opts.get(INHIBIT, "")).lower() != "true":
             problems.append(f"driver_opts {INHIBIT} is not \"true\", so the host keeps an address on the bridge and its services are reachable from the lab")
@@ -203,9 +272,10 @@ def main():
             problems.append(f"other driver_opts {sorted(set(opts) - {INHIBIT})}")
         if problems:
             r.fail(f"network {n}", ", ".join(problems),
-                   f"declare it as {{ driver: bridge, internal: true, driver_opts: {{ {INHIBIT}: \"true\" }} }} and nothing else")
+                   f"declare it as {{ driver: bridge, internal: true, driver_opts: {{ {INHIBIT}: \"true\" }} }}, "
+                   f"plus at most ipam: {{ config: [ {{ subnet: <inside {FAKE_WAN_TEXT}> }} ] }}")
         else:
-            r.ok(f"network {n} internal")
+            r.ok(f"network {n} internal" + (f", fake-WAN subnet {subnets[n]}" if subnets[n] else ""))
 
     volumes = cfg.get("volumes") or {}
     for v, spec in volumes.items():
@@ -217,7 +287,8 @@ def main():
     services = cfg.get("services") or {}
     if not services:
         r.fail("services", "none declared", "add victim, generator and capture services")
-    ctx = {"services": set(services), "networks": set(networks), "volumes": set(volumes), "roots": roots}
+    ctx = {"services": set(services), "networks": set(networks), "volumes": set(volumes), "roots": roots,
+           "subnets": subnets}
     for s, spec in services.items():
         spec = spec or {}
         check_service(s, spec, ctx, r)
