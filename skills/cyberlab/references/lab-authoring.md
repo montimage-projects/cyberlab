@@ -2,7 +2,7 @@
 
 Read this in Step 4 when the generator is a lab. Start from the closest template (`cyberlab templates`), change only what the mission needs, then run `cyberlab check <lab>` until it prints `RESULT PASS`.
 
-Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting](#adapting-a-template) · [Adding a trace](#adding-a-trace) · [Isolation policy](#isolation-policy) · [Failures seen before](#failures-seen-before)
+Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting](#adapting-a-template) · [Fake-WAN addresses](#fake-wan-addresses) · [Adding a trace](#adding-a-trace) · [Isolation policy](#isolation-policy) · [Failures seen before](#failures-seen-before)
 
 ## The contract
 
@@ -11,7 +11,7 @@ Contents: [The contract](#the-contract) · [Templates](#templates) · [Adapting]
 | Part | Requirement |
 |---|---|
 | `name:` | `cyberlab-<lab>` (`cyberlab new` sets it; teardown and `nuke` find labs by it) |
-| network | one network: `driver: bridge`, `internal: true`, `driver_opts: { com.docker.network.bridge.inhibit_ipv4: "true" }`; no `ports:` anywhere |
+| network | one network: `driver: bridge`, `internal: true`, `driver_opts: { com.docker.network.bridge.inhibit_ipv4: "true" }`, optionally a fake-WAN `ipam` subnet ([below](#fake-wan-addresses)); no `ports:` anywhere |
 | `victim` | the server under test, on the lab network |
 | `capture` | `image: ${CYBERLAB_TOOLS:-cyberlab/tools:local}`, `network_mode: "service:victim"`, `tcpdump -Z root -i eth0 -B 32768 --immediate-mode -U -w /cap/${PCAP}.pcap <bpf>`, healthcheck `test -s /cap/${PCAP}.pcap` (the trace stays inside the container until `run` copies it to `out/`) |
 | `generator` | the client/attacker; reads `${MODE}`, `depends_on` capture `service_healthy`, sleeps ~2 s, does its work, **exits 0** on success and non-zero on failure |
@@ -40,6 +40,30 @@ Keep the service names `generator` (attacker or client) and `victim` (victim or 
 6. `mechanism.md`: the template's explanation of the attack: who is who, a sequence diagram of the exchange, one diagram per trace, and references. Rewrite it, diagrams included, when the attack, server or variant changes (`references/mission.md` → *Mechanism*, *Mermaid diagrams*).
 7. Template leftovers: remove comments, config directives, modes and payload files that serve the template's attack and not this mission (e.g. brute-force delay settings in a lab that now does a bounce scan).
 
+## Fake-WAN addresses
+
+For a rule keyed on IP addresses (an IoC list, a known C2 or scanner host), the generator can hold a fixed address instead of the one Docker picks, so the capture is a real session from that address. Real IoC addresses are public, and a lab never uses them: Docker's internal network drops only traffic to addresses *outside* the lab subnet, so a public lab subnet would let a container reach the real hosts of that subnet that no lab service holds (`references/safety.md`). The policy accepts only the RFC 5737 documentation ranges, which no one routes: `192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`.
+
+```yaml
+networks:
+  lab:
+    driver: bridge
+    internal: true
+    driver_opts: { com.docker.network.bridge.inhibit_ipv4: "true" }
+    ipam: { config: [ { subnet: 203.0.113.0/24 } ] }      # one subnet inside a TEST-NET range
+services:
+  victim:
+    networks: { lab: { ipv4_address: 203.0.113.10 } }
+  generator:
+    networks: { lab: { ipv4_address: 203.0.113.32 } }    # stands in for IoC 66.179.31.32
+```
+
+- One network, one subnet, inside one TEST-NET range (a `/24` or narrower); `ipam` holds `config` with `subnet` and optionally `gateway` / `ip_range` inside it, and an optional `driver: default`; nothing else. The victim and every pinned service are on that network, because capture listens on the victim's `eth0`.
+- Pinned `ipv4_address` values sit inside the subnet and are not its network or broadcast address. With `inhibit_ipv4` Docker reserves no gateway, so `.1` can be pinned too.
+- Keep the last octet of the IoC (`66.179.31.32` → `203.0.113.32`) where it fits, and record each mapping on the brief's `Stand-ins:` line (`references/mission.md`): the trace document shows it, and the consumer substitutes the stand-in for the IoC (a rule variable, or a copy of the rule) when it replays the trace. Several IoC addresses get several stand-ins in the same subnet.
+- The trace document marks pinned addresses as fixed in `docker-compose.yml`; the provenance records them per service (`ipv4_address`).
+- The trace shows the stand-in, never the IoC itself: say so under Uncertainty in the hand-off. It is still a lab capture (real timing, framing and session), which a crafted trace cannot be.
+
 ## Adding a trace
 
 In a lab that already holds traces (a continued mission):
@@ -54,7 +78,7 @@ In a lab that already holds traces (a continued mission):
 `cyberlab check` (and `run`, before starting) refuses a lab containing a symlink, then resolves the compose file with `MODE`/`PCAP` set to each mode of `expect.json` and checks it against an **allowlist**; any key or value not listed fails:
 
 - top level: `name` (`cyberlab-*`), `services`, `networks`, `volumes`;
-- networks: `driver: bridge`, `internal: true`, `driver_opts` exactly `com.docker.network.bridge.inhibit_ipv4: "true"` (no host address on the bridge: see `references/safety.md`), the default name, no ipam, no external network;
+- networks: `driver: bridge`, `internal: true`, `driver_opts` exactly `com.docker.network.bridge.inhibit_ipv4: "true"` (no host address on the bridge: see `references/safety.md`), the default name, no external network, and `ipam` either absent or one fake-WAN subnet inside a TEST-NET range ([Fake-WAN addresses](#fake-wan-addresses)); a pinned `ipv4_address` must be a host address of its network's subnet;
 - services: `image`, `build` (context inside the lab; `dockerfile`, `args`, `target` only), `command`, `entrypoint`, `environment`, `working_dir`, `user`, `depends_on`, `healthcheck`, `labels`, `hostname`, `expose`, `tmpfs`, `read_only`, `init`, `stop_grace_period`, `stop_signal`, `platform`, `pull_policy`, `stdin_open`, `tty`, `cap_add` (NET_RAW/NET_ADMIN), `cap_drop`, `networks` (declared ones), `network_mode` (`service:<lab service>` or `none`), `volumes` (bind inside the lab, declared lab volumes, tmpfs; never an engine socket), `restart: "no"`;
 - runner contract: `generator` and `capture` exist; `capture` uses the tools image, runs `tcpdump … -w /cap/<trace>`, shares a lab service's network namespace and mounts nothing — so only tcpdump can produce the trace that `run` copies out.
 
@@ -70,5 +94,7 @@ It warns (does not fail) on an image without a pinned tag. While running, `run` 
 | Window/rate expectations fail on crafted traces | crafted timing is compressed | use a lab with the real server |
 | `the capture dropped N packet(s)` | a burst outran tcpdump (seen when it wrote through a bind mount on Docker Desktop) | write to `/cap` inside the capture container as the templates do, raise `-B`, or pace the generator; never keep an incomplete trace |
 | Lab left running after an interruption | the run was killed | `cyberlab down <lab>`, or `cyberlab nuke` |
+| `ipam subnet … is outside the TEST-NET ranges` | the lab pins a real (public or private) subnet, e.g. the IoC's own /24 | use a TEST-NET stand-in and record it on the `Stand-ins:` line ([Fake-WAN addresses](#fake-wan-addresses)) |
+| `Pool overlaps with other one on this address space` at `up` | another network on the host (often a leftover lab) already uses that TEST-NET subnet | `cyberlab status`, then `cyberlab down` the other lab, or pick another TEST-NET range |
 | An IGMP report appears in one capture and not the next | the Docker bridge's own start-up IGMP report (source 0.0.0.0) races tcpdump, and other containers' IGMP is not forwarded to the victim | never claim IGMP in a lab capture; allow it (`max`, no `min`) or exclude `ip.src == 0.0.0.0` from "nothing else" checks |
 | A derived trace no longer matches after its source was recaptured | a `--script` craft reads another trace in `out/` | regenerate the source first, then the derived traces; `doc` warns when a source trace changed |

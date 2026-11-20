@@ -131,6 +131,39 @@ class MacRolesTarget(unittest.TestCase):
         self.assertEqual(role_of(who, VIC_IP), "Victim")
 
 
+class FakeWanAddresses(unittest.TestCase):
+    """Pinned (fake-WAN) addresses and the brief's Stand-ins line, issue #20."""
+
+    def test_stand_ins_line_is_read_from_the_brief(self):
+        with tempfile.TemporaryDirectory() as lab:
+            with open(os.path.join(lab, "mission.md"), "w") as f:
+                f.write("# Mission: x\n- Server/client: nginx\n- Stand-ins: 203.0.113.32 = IoC 66.179.31.32\n")
+            fields = trace_doc.read_mission(lab)["fields"]
+        self.assertEqual(fields["Stand-ins"], "203.0.113.32 = IoC 66.179.31.32")
+        self.assertEqual(fields["Server/client"], "nginx")
+
+    def test_pinned_addresses_come_from_provenance_services(self):
+        prov = {"services": {"generator": {"ipv4_address": "203.0.113.32"}, "victim": {"ipv4_address": ["203.0.113.10"]},
+                             "capture": {"network_mode": "service:victim"}}}
+        self.assertEqual(trace_doc.pinned_addresses(prov), {"203.0.113.32": "generator", "203.0.113.10": "victim"})
+        self.assertIn("pinned in `docker-compose.yml`", trace_doc.addresses_note(trace_doc.pinned_addresses(prov)))
+
+    def test_pinned_of_reads_the_resolved_compose_service(self):
+        self.assertEqual(trace_doc.pinned_of({"networks": {"lab": {"ipv4_address": "203.0.113.32"}}}), "203.0.113.32")
+        self.assertEqual(trace_doc.pinned_of({"networks": {"b": {"ipv4_address": "198.51.100.2"}, "a": {"ipv4_address": "192.0.2.9"}}}),
+                         ["192.0.2.9", "198.51.100.2"])
+        for svc in ({"networks": {"lab": None}}, {"networks": {"lab": {"aliases": ["x"]}}}, {"network_mode": "service:victim"}):
+            with self.subTest(svc=svc):
+                self.assertIsNone(trace_doc.pinned_of(svc))
+        prov = {"services": {"generator": {"ipv4_address": trace_doc.pinned_of(
+            {"networks": {"b": {"ipv4_address": "198.51.100.2"}, "a": {"ipv4_address": "192.0.2.9"}}})}}}
+        self.assertEqual(trace_doc.pinned_addresses(prov), {"192.0.2.9": "generator", "198.51.100.2": "generator"})
+
+    def test_unpinned_lab_keeps_the_docker_assigns_note(self):
+        self.assertEqual(trace_doc.addresses_note(trace_doc.pinned_addresses({"services": {"generator": {}}})),
+                         "Docker assigns the addresses on each run.")
+
+
 class DerivedTrace(unittest.TestCase):
     """#16: a --script trace derived from another lab trace does not claim no host was involved."""
 

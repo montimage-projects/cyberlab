@@ -202,6 +202,9 @@ def cmd_provenance(a):
             for k in ("entrypoint", "command", "network_mode", "environment"):
                 if s.get(k):
                     entry[k] = s[k]
+            pinned = pinned_of(s)
+            if pinned:
+                entry["ipv4_address"] = pinned
             services[name] = entry
         prov["services"] = services
     ids = ctx.pop("image_ids", [])
@@ -254,7 +257,7 @@ def read_mission(lab):
         elif in_log and line.startswith("- "):
             m["log"].append(line[2:].strip())
         else:
-            mm = re.match(r"-\s+([A-Za-z/ ]+):\s*(.*)", line)
+            mm = re.match(r"-\s+([A-Za-z][A-Za-z/ -]*):\s*(.*)", line)
             if mm and not in_log:
                 key, val = mm.group(1).strip(), mm.group(2).strip()
                 if key == "Traces":
@@ -525,6 +528,32 @@ def derived_sources(prov, lab=""):
     return out
 
 
+def pinned_of(service):
+    """The ipv4_address a resolved compose service pins: one string, a sorted list for several networks, or None."""
+    pinned = sorted(str(o["ipv4_address"]) for o in (service.get("networks") or {}).values()
+                    if isinstance(o, dict) and o.get("ipv4_address"))
+    return (pinned[0] if len(pinned) == 1 else pinned) if pinned else None
+
+
+def pinned_addresses(prov):
+    """{address: service} for the ipv4_address values docker-compose.yml pins (fake-WAN labs)."""
+    out = {}
+    for name, s in (prov.get("services") or {}).items():
+        v = (s or {}).get("ipv4_address")
+        for a in ([v] if isinstance(v, str) else v or []):
+            out[str(a)] = name
+    return out
+
+
+def addresses_note(pinned):
+    """How the lab's addresses were chosen, for the who-is-who note."""
+    if not pinned:
+        return "Docker assigns the addresses on each run."
+    names = ", ".join(f"`{a}` (`{s}`)" for a, s in sorted(pinned.items()))
+    return (f"{names} {'is' if len(pinned) == 1 else 'are'} pinned in `docker-compose.yml` on a fake-WAN TEST-NET subnet, "
+            "so every run uses the same address; Docker assigns any other address on each run.")
+
+
 def who_is_who(trace, prov, mech, mission, rows, lab=""):
     """Who sent the trace's frames: one entry per address, the primary roles first.
     Sources, strongest last: the trace (inferred), craft_pcap.py's fixed addresses (crafted), the
@@ -650,7 +679,8 @@ def who_is_who(trace, prov, mech, mission, rows, lab=""):
         out.append(entry)
     out.sort(key=lambda e: (order.get(e["role"], 2 if e["how"] in ("declared", "recorded") and not e["role"].startswith("Other") else 3), -(e["sent"] + e["recv"])))
     return {"kind": kind, "gen": gen_role, "vic": vic_role, "rows": out, "pairs": pairs, "unresolved": unresolved,
-            "crafted": crafted, "derived": derived, "script": script, "lab": bool(services), "inferred": any(e["how"] == "inferred" and not e["role"].startswith("Other") for e in out)}
+            "crafted": crafted, "derived": derived, "script": script, "lab": bool(services), "inferred": any(e["how"] == "inferred" and not e["role"].startswith("Other") for e in out),
+            "pinned": pinned_addresses(prov)}
 
 
 def mm(s):
@@ -870,7 +900,7 @@ def who_section(who):
     elif any(e["how"] == "recorded" for e in prim):
         L.append(f"_The lab's `generator` service is the {who['gen'].lower()} and its `victim` service the {who['vic'].lower()}: "
                  "the generator is called the attacker only in attack traces (name starting with `attack`, or a `Traces:` line "
-                 "saying the rule fires). Docker assigns the addresses on each run._")
+                 f"saying the rule fires). {addresses_note(who.get('pinned'))}_")
         L.append("")
     return L
 
@@ -1051,6 +1081,8 @@ def render(lab, trace, mission, expect, verify, now, lab_name="", mech=None, row
         L.append(f"- **Generator:** {f['Generator']}")
     if f.get("Server/client"):
         L.append(f"- **Server/client:** {f['Server/client']}")
+    if f.get("Stand-ins"):
+        L.append(f"- **Stand-ins:** {f['Stand-ins']}")
     if command:
         L.append(f"- **Command:** `{command}`" + ("" if prov.get("command") else " (reconstructed from the provenance" + ("; argument quoting was not recorded)" if " -- " in command else ")")))
     if prov.get("env"):
@@ -1154,7 +1186,7 @@ def render(lab, trace, mission, expect, verify, now, lab_name="", mech=None, row
     L.append("")
     g = prov.get("generator", "")
     if not crafted:
-        L.append("**What \"the same\" means for a lab capture.** A rerun gives an equivalent trace, not the same file: timestamps, TCP initial sequence numbers, client ports, the addresses Docker assigns and the server's own timing change on every run, so the sha256 will differ. The rerun is equivalent when the expectations above pass and the packet list shows the same exchange (same messages, same order, same counts).")
+        L.append("**What \"the same\" means for a lab capture.** A rerun gives an equivalent trace, not the same file: timestamps, TCP initial sequence numbers, client ports, the addresses Docker assigns (addresses pinned in `docker-compose.yml` stay the same) and the server's own timing change on every run, so the sha256 will differ. The rerun is equivalent when the expectations above pass and the packet list shows the same exchange (same messages, same order, same counts).")
         L.append("")
         L.append("To get closer to the original:")
         L.append("")

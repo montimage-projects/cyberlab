@@ -16,6 +16,7 @@ Write `<lab>/mission.md` with exactly these lines (`ASSUMED:` in front of each v
 - Traces: <file name> — <what must be visible in it>; [rule <N>: <its condition and threshold, e.g. >20 A-ASSOCIATE-RQ in 5 s>; fires | stays silent]   (one line per trace; as many as the task needs; the rule part when the consumer named a rule)
 - Generator: <crafted | lab> — <why, from the table below>
 - Server/client: <images or implementations used, with versions>   (lab only)
+- Stand-ins: <TEST-NET address> = <real address it stands for>, …   (fake-WAN labs only: references/lab-authoring.md → *Fake-WAN addresses*)
 - Destination: <lab directory> (<named by the requester | default: the invocation directory>); <where the consumer will copy the traces, if it said>
 - Out of scope: <what this mission does not produce>
 
@@ -78,6 +79,7 @@ Take the first row that matches:
 |---|---|---|
 | timing, rate, thresholds, request/response order, or several messages packed per TCP segment | **lab** with a real server (required) | real servers add delays and real stacks pack frames; crafted traces hide both |
 | normal traffic of a protocol that has an open-source server/client image | **lab** | a real implementation is evidence; a crafted trace only shows how the spec was read |
+| a rule keyed on IP addresses (an IoC list, a known C2 or scanner host) | **lab** with a fake-WAN subnet (`references/lab-authoring.md` → *Fake-WAN addresses*): the generator holds a TEST-NET stand-in for each IoC address, recorded on the `Stand-ins:` line | a real session from the address the rule matches, with real timing and framing; the consumer maps each stand-in to its IoC (rule variable or substitution) |
 | only field values or payload patterns, one message per packet, and no runnable implementation (or the consumer asked for synthetic) | **crafted** (`cyberlab craft`) | deterministic, no network at all |
 
 Crafted traces are **synthetic**: the provenance says so, and the hand-off report repeats it.
@@ -136,7 +138,7 @@ Write `<lab>/mechanism.md` in Step 4, and correct it in Step 6 against what each
 ````markdown
 # Mechanism: <attack or protocol name, with its CVE if it has one>
 
-**Who is who:** the attacker (or client) is <the lab's `generator` service | an address, crafted traces>, <what it runs>; the victim (or server) is <the `victim` service | an address>, <what it runs>; <any other host and its part>. <Lab: "Docker gives them new addresses on every run: each trace's document opens with them.">
+**Who is who:** the attacker (or client) is <the lab's `generator` service | an address, crafted traces>, <what it runs>; the victim (or server) is <the `victim` service | an address>, <what it runs>; <any other host and its part>. <Lab: "Docker gives them new addresses on every run: each trace's document opens with them." Fake-WAN lab: "the generator holds <stand-in>, standing in for IoC <address>.">
 
 ```mermaid
 sequenceDiagram
@@ -162,7 +164,7 @@ sequenceDiagram
 ````
 
 - **Who is who comes first**, before any explanation: the reader learns which party is the attacker and which the victim before the details. The trace document then opens with the same parties and their actual addresses, MACs and frame counts, in its own *Who is who* section.
-- **Never write a lab trace's IP address into `mechanism.md`**: Docker assigns addresses on each run, so the text would go stale. `cyberlab run` records them; the trace document shows them.
+- **Never write a lab trace's IP address into `mechanism.md`**: Docker assigns addresses on each run, so the text would go stale. `cyberlab run` records them; the trace document shows them. The one exception is a fake-WAN stand-in pinned in `docker-compose.yml` (with the IoC it stands for): it does not change between runs.
 - **`Roles:` line**, the first line of a trace section, names who is who where the trace document cannot know it: a `--script` crafted trace (`Roles: attacker = 10.9.0.7, victim = 10.9.0.2, zombie = 10.9.0.5`), or a lab host other than `generator` and `victim`. Targets are lab service names or addresses as they appear in the trace (IPv4, IPv6, MAC). A MAC whose host also sends IP frames names that host's address, unless the MAC sends from several addresses or another MAC sends from the same one (ARP spoofing, forwarding): `doc` then warns, and the host is named by its IP address. Lab captures need none: the generator is the attacker in attack traces and the client otherwise, the victim service the victim or server. `doc` warns when roles had to be inferred, or a `Roles:` target is not in the trace.
 - A protocol capture describes the protocol instead: its messages and fields, and the cases the trace covers. Its parties are client and server.
 - One `## <trace>.pcap` section per trace, each with its own diagram. A continued lab adds sections and leaves the others unchanged.
