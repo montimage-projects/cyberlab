@@ -9,6 +9,10 @@
   - The brief gets an optional `Stand-ins:` line mapping each stand-in to its IoC, shown in the trace document; the provenance records each service's pinned address, and the document says pinned addresses stay the same between runs.
 - Clean up lab images after a mission, with confirmation. `cyberlab down <lab> --images` also removes the images compose built for that lab (untagged ones a rebuild left behind included) and says so only when none is left, and `cyberlab nuke --images` removes every image built for a cyberlab lab; pulled images and the tools image are never touched. `cyberlab status` now lists those built images too, so it stays the dry run. The skill's hand-off ends by showing the lab's built images and removing them only after the person says yes; a calling skill with nobody to ask keeps them and names them in the report.
 
+### Documentation
+
+- Document `cyberlab craft <lab> <trace.pcap> --script <generator.py>` as the path for crafted evidence traces (#21). A new *Crafted evidence traces* section in `references/crafted.md` says when to craft instead of using a fake-WAN lab (the literal public address must be in the trace bytes, no runnable implementation, or the consumer asks for synthetic) and which link types verify accepts; gives the exact invocation and why `craft <lab> <trace> -- gen.py` fails; documents the `--script` contract (`$OUT`, standard library only, no network, the provenance sidecar written automatically); and requires every downstream report, including a consuming skill's, to label the trace synthetic. SKILL.md Step 5 and the README show the `--script` form; SKILL.md Steps 2/4 and `references/mission.md` point to the new section.
+
 ## v1.3.0 — 2026-11-19
 
 ### Features

@@ -310,7 +310,10 @@ A crafted trace, for a protocol with no runnable implementation (from [`referenc
 
 ```bash
 cyberlab craft <lab> capture.pcap -- --parent udp:dport=5684 --payload "40 01 00 01" --payload "s:60 45 00 01"
+cyberlab craft <lab> attack.pcap --script gen.py  # your own stdlib generator in the lab directory, writing to $OUT
 ```
+
+When to use a `--script`, its contract (`$OUT`, standard library only, provenance written for you) and how to label the trace downstream: [*Crafted evidence traces*](skills/cyberlab/references/crafted.md#crafted-evidence-traces).
 
 </details>
 
@@ -387,7 +390,7 @@ To reproduce a trace, share the lab directory with it: the document lists the fi
 - [`skills/cyberlab/SKILL.md`](skills/cyberlab/SKILL.md): the workflow the agent follows
 - [`skills/cyberlab/references/mission.md`](skills/cyberlab/references/mission.md): mission brief, choosing the generator, `expect.json` format
 - [`skills/cyberlab/references/lab-authoring.md`](skills/cyberlab/references/lab-authoring.md): the lab contract, adapting a template, failures seen before
-- [`skills/cyberlab/references/crafted.md`](skills/cyberlab/references/crafted.md): crafted (synthetic) traces
+- [`skills/cyberlab/references/crafted.md`](skills/cyberlab/references/crafted.md): crafted (synthetic) traces, including *Crafted evidence traces* (`craft --script`)
 - [`skills/cyberlab/references/safety.md`](skills/cyberlab/references/safety.md): threat model and payload rules
 - [`skills/cyberlab/docs/README.md`](skills/cyberlab/docs/README.md): skill overview
 - [`examples/mmt-workbench/README.md`](examples/mmt-workbench/README.md): replaying traces with MMT
