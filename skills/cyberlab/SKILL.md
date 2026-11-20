@@ -60,7 +60,7 @@ Done when `mission.md` names exactly one goal and one scope, lists every trace t
 
 ## Step 2 — Choose the smallest generator
 
-Apply `references/mission.md` → *Choose the generator*: a **lab** for timing, rate, order, real framing or a real implementation's traffic; **crafted** only for field values with no runnable implementation. A rule keyed on IP addresses (IoCs) still gets a lab: the generator holds a TEST-NET stand-in for each address on a fake-WAN subnet (`references/lab-authoring.md` → *Fake-WAN addresses*), recorded on the brief's `Stand-ins:` line. A continued lab keeps its generator unless a new trace needs the other kind: then add it to the `Generator:` line with its reason (one mission may hold lab and crafted traces). Done when the brief's `Generator:` line names the generator of every trace and its reason, and a lab's `Server/client:` line names the images.
+Apply `references/mission.md` → *Choose the generator*: a **lab** for timing, rate, order, real framing or a real implementation's traffic; **crafted** only for field values with no runnable implementation. A rule keyed on IP addresses (IoCs) still gets a lab: the generator holds a TEST-NET stand-in for each address on a fake-WAN subnet (`references/lab-authoring.md` → *Fake-WAN addresses*), recorded on the brief's `Stand-ins:` line; craft it only in the cases of `references/crafted.md` → *Crafted evidence traces* (the literal address must be in the trace bytes, no runnable implementation, or the consumer asks for synthetic). A continued lab keeps its generator unless a new trace needs the other kind: then add it to the `Generator:` line with its reason (one mission may hold lab and crafted traces). Done when the brief's `Generator:` line names the generator of every trace and its reason, and a lab's `Server/client:` line names the images.
 
 ## Step 3 — Write the expectations
 
@@ -76,7 +76,7 @@ Write `<lab>/expect.json` from the brief before generating anything, using the d
 4. Run `$S/cyberlab check <lab>`. Fix each `FAIL` line until it prints `RESULT PASS isolation policy`.
 5. Write `<lab>/mechanism.md` (`references/mission.md` → *Mechanism*, *Mermaid diagrams*). `new` copied the template's: change it, diagrams included, to match what this lab sends.
 
-**Crafted:** read `references/crafted.md`. Write `<lab>/payloads.txt` (or `<lab>/gen.py`) from the specification or attack description, and `<lab>/mechanism.md` as above, with a `Roles:` line per `--script` trace. Nothing to check: crafting has no network.
+**Crafted:** read `references/crafted.md` (a generator script: *Crafted evidence traces*). Write `<lab>/payloads.txt` (or `<lab>/gen.py`) from the specification or attack description, and `<lab>/mechanism.md` as above, with a `Roles:` line per `--script` trace. Nothing to check: crafting has no network.
 
 **Continued lab:** skip `new` when the lab already has a `docker-compose.yml` (`new` refuses it); a lab holding only crafted traces runs `new` the first time it needs a lab trace. Add one generator mode per new trace (`references/lab-authoring.md` → *Adding a trace*) without changing what existing modes send, then run `$S/cyberlab check <lab>`: it checks every mode in `expect.json`. Add a `## <trace>.pcap` section with its diagram to `mechanism.md` for each new trace, and leave the other sections as they are.
 
@@ -87,6 +87,7 @@ Done when `check` prints `RESULT PASS` (lab), or the payload or script file exis
 ```bash
 $S/cyberlab run <lab> <mode>        # lab, once per new trace: mode attack -> out/attack.pcap
 $S/cyberlab craft <lab> <trace.pcap> -- --parent tcp:port=<port> --payloads-file payloads.txt   # crafted
+$S/cyberlab craft <lab> <trace.pcap> --script <generator.py> [-- <args>]   # crafted, your own generator (writes $OUT)
 ```
 
 Expected output: `PASS runtime`, `NOTE address` (each service's address), `PASS teardown`, `PASS capture 0 packets dropped` (lab only), `NOTE trace`, one `PASS`/`FAIL` line per expectation, `RESULT PASS`, then `PASS doc out/<trace>.md`, followed by a `WARN doc` line naming each gap in the document (a missing `Traces:` line, section, diagram or references, a diagram that will not render, roles inferred). A run can take up to `CYBERLAB_TIMEOUT` (300 s) plus image pulls and builds: give the shell command a longer timeout or run it in the background; an interrupted run tears its lab down.

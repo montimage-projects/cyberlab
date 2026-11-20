@@ -82,7 +82,9 @@ Take the first row that matches:
 | a rule keyed on IP addresses (an IoC list, a known C2 or scanner host) | **lab** with a fake-WAN subnet (`references/lab-authoring.md` → *Fake-WAN addresses*): the generator holds a TEST-NET stand-in for each IoC address, recorded on the `Stand-ins:` line | a real session from the address the rule matches, with real timing and framing; the consumer maps each stand-in to its IoC (rule variable or substitution) |
 | only field values or payload patterns, one message per packet, and no runnable implementation (or the consumer asked for synthetic) | **crafted** (`cyberlab craft`) | deterministic, no network at all |
 
-Crafted traces are **synthetic**: the provenance says so, and the hand-off report repeats it.
+An IoC-keyed rule takes the fake-WAN lab row even when a crafted trace could carry the real address: craft it only when the literal public address must appear in the trace bytes and the consumer does not accept a stand-in, or in the crafted row's cases (`references/crafted.md` → *Crafted evidence traces*).
+
+Crafted traces are **synthetic**: the provenance says so, the hand-off report repeats it, and so must every report downstream that uses them.
 
 ## Expectations
 
